@@ -1,7 +1,5 @@
 import maplibregl, { type Map as MlMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { ALL_CCTV_CAMERAS, type CctvCamera } from '../data/cctv-cameras';
-import { UNDERSEA_CABLES } from '../data/cables';
 import type { EarthquakeItem } from './layers/EarthquakeLayer';
 import { CctvPreviewsManager } from './CctvPreviews';
 
@@ -30,7 +28,7 @@ export class GlobeScene {
   public onSelectNews?: (news: any) => void;
 
   private currentStyle: 'dark' | 'sat' = 'dark';
-  private currentPitch: 50 | 0 = 50;
+  private currentProjection: 'globe' | 'mercator' = 'globe';
 
   private layerStates: GlobeLayerState = {
     cctv: true,
@@ -49,37 +47,36 @@ export class GlobeScene {
   }
 
   private initMap(): void {
-    // Style: CartoDB Dark Matter vector style (crisp streets, highways, district labels)
     const styleUrl = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
     this.map = new maplibregl.Map({
       container: this.container,
       style: styleUrl,
-      center: [121.50, 25.04], // Center on Taipei / New Taipei City
-      zoom: 12.5,
+      center: [121.50, 25.04], // Focus on Taiwan in global perspective
+      zoom: 2.3, // Starts as 3D spherical Earth in space!
       minZoom: 1.5,
       maxZoom: 18,
-      pitch: 50, // 3D perspective pitch matching Osiris
+      pitch: 30, // 3D tilted horizon perspective
       bearing: 0,
       attributionControl: false,
       maxPitch: 85,
     });
 
-    // Disable auto-rotation by default! User has 100% stable control
-    this.autoRotate = false;
-
-    // Stop any rotation if user interacts
+    // Stop auto-rotation if user touches, drags, or zooms
     this.map.on('dragstart', () => { this.setAutoRotate(false); });
     this.map.on('touchstart', () => { this.setAutoRotate(false); });
     this.map.on('wheel', () => { this.setAutoRotate(false); });
 
     this.map.on('load', () => {
+      this.setupGlobeAtmosphere();
       this.initSatelliteLayer();
-      this.initCctvLayer();
-      this.initEarthquakeLayer();
-      this.initCablesLayer();
-      this.initAirCorridorsLayer();
+      this.initSubmarineCablesLayer();
+      this.initGlobalCctvLayer();
       this.initMaritimeLayer();
+      this.initLiveNewsLayer();
+      this.initConflictsLayer();
+      this.initEarthquakeLayer();
+      this.initAirCorridorsLayer();
       this.initTacticalControls();
       this.initTelemetryHUD();
 
@@ -88,12 +85,27 @@ export class GlobeScene {
         this.handleCctvClick(cam);
       });
 
-      // Trigger resize after layout settles
       setTimeout(() => this.map.resize(), 100);
       setTimeout(() => this.map.resize(), 500);
     });
 
     window.addEventListener('resize', this.onResize);
+  }
+
+  private setupGlobeAtmosphere(): void {
+    try {
+      (this.map as any).setProjection({ type: 'globe' });
+      (this.map as any).setSky({
+        'sky-color': '#030308',
+        'sky-horizon-blend': 0.5,
+        'horizon-color': '#070716',
+        'horizon-fog-blend': 0.3,
+        'fog-color': '#030308',
+        'fog-ground-blend': 0.85,
+      });
+    } catch (e) {
+      console.warn('[GlobeScene] 3D globe projection setup:', e);
+    }
   }
 
   private initSatelliteLayer(): void {
@@ -110,62 +122,80 @@ export class GlobeScene {
         type: 'raster',
         source: 'satellite-tiles',
         layout: { visibility: 'none' },
-        paint: { 'raster-opacity': 0.85 },
+        paint: { 'raster-opacity': 0.88 },
       });
     }
   }
 
-  private initCctvLayer(): void {
-    const features = ALL_CCTV_CAMERAS.map((cam) => ({
-      type: 'Feature' as const,
-      geometry: {
-        type: 'Point' as const,
-        coordinates: [cam.lng, cam.lat],
-      },
-      properties: {
-        id: cam.id,
-        name: cam.name,
-        city: cam.city,
-        country: cam.country,
-        feed_url: cam.feed_url || '',
-        stream_url: cam.stream_url || '',
-        stream_type: cam.stream_type || 'jpg',
-        videoId: cam.videoId || '',
-        source: cam.source,
-      },
-    }));
+  private async initSubmarineCablesLayer(): Promise<void> {
+    const baseUrl = import.meta.env.BASE_URL || '/';
+    try {
+      this.map.addSource('cables', {
+        type: 'geojson',
+        data: `${baseUrl}data/submarine-cables.json`,
+      });
 
+      this.map.addLayer({
+        id: 'cables-layer',
+        type: 'line',
+        source: 'cables',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round',
+        },
+        paint: {
+          'line-color': '#5eead4',
+          'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.8, 6, 1.8, 12, 2.5],
+          'line-opacity': 0.75,
+        },
+      });
+
+      this.map.on('click', 'cables-layer', (e) => {
+        const feat = e.features?.[0];
+        if (feat?.properties) {
+          this.onSelectIncident?.({
+            title: `SUBSEA CABLE // ${feat.properties.name || 'Fiber Optic Route'}`,
+            location: `Global Oceanic Trunk (${Math.round(feat.properties.length_km || 4000)} km)`,
+            summary: `High-bandwidth trans-oceanic fiber optic infrastructure. Critical telecommunication node.`,
+            level: 'MONITOR',
+          });
+        }
+      });
+    } catch (e) {
+      console.warn('[GlobeScene] Submarine cables load failed:', e);
+    }
+  }
+
+  private initGlobalCctvLayer(): void {
+    const baseUrl = import.meta.env.BASE_URL || '/';
     this.map.addSource('cctv', {
       type: 'geojson',
-      data: {
-        type: 'FeatureCollection',
-        features,
-      },
+      data: `${baseUrl}data/cctv.geojson`,
     });
 
-    // Outer subtle glow
+    // Outer glow
     this.map.addLayer({
       id: 'cctv-glow',
       type: 'circle',
       source: 'cctv',
       paint: {
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 4, 6, 7, 10, 12, 14, 18],
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 3, 5, 5, 10, 10, 14, 16],
         'circle-color': '#10b981',
-        'circle-opacity': 0.25,
+        'circle-opacity': 0.22,
         'circle-blur': 0.8,
       },
     });
 
-    // Main emerald dot
+    // Main emerald surveillance dot
     this.map.addLayer({
       id: 'cctv-dots',
       type: 'circle',
       source: 'cctv',
       paint: {
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 2.5, 6, 4.5, 10, 7, 14, 10],
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 1.8, 5, 3.5, 10, 6, 14, 9],
         'circle-color': '#10b981',
         'circle-opacity': 0.95,
-        'circle-stroke-width': 2,
+        'circle-stroke-width': 1.5,
         'circle-stroke-color': '#000000',
         'circle-stroke-opacity': 0.9,
       },
@@ -179,8 +209,7 @@ export class GlobeScene {
       minzoom: 11,
       layout: {
         'text-field': ['get', 'name'],
-        'text-size': 9.5,
-        'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+        'text-size': 9,
         'text-offset': [0, 1.6],
         'text-max-width': 12,
         'text-allow-overlap': false,
@@ -193,7 +222,6 @@ export class GlobeScene {
       },
     });
 
-    // Interaction
     this.map.on('click', 'cctv-dots', (e) => {
       const feat = e.features?.[0];
       if (feat && feat.properties) {
@@ -210,17 +238,264 @@ export class GlobeScene {
   }
 
   private handleCctvClick(cam: any): void {
+    let videoId = cam.videoId;
+    if (!videoId && cam.stream_url) {
+      const m = String(cam.stream_url).match(/(?:embed\/|v=|vi\/|youtu\.be\/|\/v\/)([a-zA-Z0-9_-]{11})/);
+      if (m) videoId = m[1];
+    }
+
     this.onSelectCctv?.({
       id: cam.id,
       name: cam.name,
       city: cam.city,
       country: cam.country,
       lat: cam.lat,
-      lon: cam.lng,
-      videoId: cam.videoId || '',
-      feed_url: cam.feed_url,
-      stream_type: cam.stream_type,
+      lon: cam.lng !== undefined ? cam.lng : cam.lon,
+      videoId: videoId || '',
+      feed_url: cam.feed_url || '',
+      stream_type: cam.stream_type || 'jpg',
+      source: cam.source || 'CCTV',
     });
+  }
+
+  private async initMaritimeLayer(): Promise<void> {
+    const baseUrl = import.meta.env.BASE_URL || '/';
+    try {
+      const res = await fetch(`${baseUrl}data/maritime.json`);
+      const data = await res.json();
+
+      // Ports GeoJSON
+      const portFeatures = (data.ports || []).map((p: any) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+        properties: { ...p, kind: 'port' },
+      }));
+
+      // Chokepoints GeoJSON
+      const chokepointFeatures = (data.chokepoints || []).map((c: any) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [c.lng, c.lat] },
+        properties: { ...c, kind: 'chokepoint' },
+      }));
+
+      this.map.addSource('maritime-data', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: [...portFeatures, ...chokepointFeatures],
+        },
+      });
+
+      // Ports layer (cyan)
+      this.map.addLayer({
+        id: 'maritime-ports-layer',
+        type: 'circle',
+        source: 'maritime-data',
+        filter: ['==', ['get', 'kind'], 'port'],
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 2.5, 6, 4.5, 12, 8],
+          'circle-color': '#38bdf8',
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#000',
+        },
+      });
+
+      // Chokepoints layer (amber pulsing)
+      this.map.addLayer({
+        id: 'maritime-chokepoint-glow',
+        type: 'circle',
+        source: 'maritime-data',
+        filter: ['==', ['get', 'kind'], 'chokepoint'],
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 6, 6, 12, 12, 20],
+          'circle-color': '#f59e0b',
+          'circle-opacity': 0.35,
+          'circle-blur': 0.8,
+        },
+      });
+
+      this.map.addLayer({
+        id: 'maritime-chokepoints-layer',
+        type: 'circle',
+        source: 'maritime-data',
+        filter: ['==', ['get', 'kind'], 'chokepoint'],
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 4, 6, 7, 12, 11],
+          'circle-color': '#f59e0b',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#000',
+        },
+      });
+
+      this.map.addLayer({
+        id: 'maritime-label',
+        type: 'symbol',
+        source: 'maritime-data',
+        minzoom: 3,
+        layout: {
+          'text-field': ['get', 'name'],
+          'text-size': 9,
+          'text-offset': [0, 1.5],
+        },
+        paint: {
+          'text-color': '#f59e0b',
+          'text-halo-color': '#000',
+          'text-halo-width': 1.5,
+        },
+      });
+
+      this.map.on('click', 'maritime-chokepoints-layer', (e) => {
+        const p = e.features?.[0]?.properties;
+        if (p) {
+          this.onSelectIncident?.({
+            title: `MARITIME CHOKEPOINT // ${p.name}`,
+            location: `Strategic Transit Zone (Risk: ${p.risk || 'ELEVATED'})`,
+            summary: `Traffic Volume: ${p.traffic || 'High-volume international maritime shipping lane'}.`,
+            level: p.risk === 'HIGH' ? 'CRITICAL' : 'ELEVATED',
+          });
+        }
+      });
+    } catch (e) {
+      console.warn('[GlobeScene] Maritime load failed:', e);
+    }
+  }
+
+  private async initLiveNewsLayer(): Promise<void> {
+    const baseUrl = import.meta.env.BASE_URL || '/';
+    try {
+      const res = await fetch(`${baseUrl}data/live-news.json`);
+      const data = await res.json();
+      const features = (data.feeds || []).map((n: any) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [n.lng, n.lat] },
+        properties: n,
+      }));
+
+      this.map.addSource('live-news-data', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features },
+      });
+
+      // Red TV dot
+      this.map.addLayer({
+        id: 'live-news-dots',
+        type: 'circle',
+        source: 'live-news-data',
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 4, 6, 7, 12, 10],
+          'circle-color': '#ef4444',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff',
+        },
+      });
+
+      this.map.addLayer({
+        id: 'live-news-label',
+        type: 'symbol',
+        source: 'live-news-data',
+        minzoom: 3,
+        layout: {
+          'text-field': ['concat', '📺 ', ['get', 'name']],
+          'text-size': 9.5,
+          'text-offset': [0, 1.6],
+        },
+        paint: {
+          'text-color': '#ffffff',
+          'text-halo-color': '#ef4444',
+          'text-halo-width': 1.5,
+        },
+      });
+
+      this.map.on('click', 'live-news-dots', (e) => {
+        const p = e.features?.[0]?.properties;
+        if (p) {
+          this.onSelectNews?.({
+            id: p.id,
+            source: p.name,
+            headline: `24/7 Global Satellite News Broadcast (${p.city}, ${p.country})`,
+            time: 'LIVE BROADCAST',
+            city: p.city,
+            country: p.country,
+            category: p.category,
+            url: p.url,
+          });
+        }
+      });
+    } catch (e) {
+      console.warn('[GlobeScene] Live news load failed:', e);
+    }
+  }
+
+  private async initConflictsLayer(): Promise<void> {
+    const baseUrl = import.meta.env.BASE_URL || '/';
+    try {
+      const res = await fetch(`${baseUrl}data/conflicts.json`);
+      const data = await res.json();
+      const features = (data.zones || []).map((z: any) => ({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [z.lng, z.lat] },
+        properties: z,
+      }));
+
+      this.map.addSource('conflicts-data', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features },
+      });
+
+      this.map.addLayer({
+        id: 'conflict-glow',
+        type: 'circle',
+        source: 'conflicts-data',
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 8, 6, 16, 12, 28],
+          'circle-color': '#dc2626',
+          'circle-opacity': 0.35,
+          'circle-blur': 0.85,
+        },
+      });
+
+      this.map.addLayer({
+        id: 'conflict-dots',
+        type: 'circle',
+        source: 'conflicts-data',
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 5, 6, 8, 12, 12],
+          'circle-color': '#dc2626',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#000000',
+        },
+      });
+
+      this.map.addLayer({
+        id: 'conflict-label',
+        type: 'symbol',
+        source: 'conflicts-data',
+        layout: {
+          'text-field': ['concat', '⚠️ ', ['get', 'label']],
+          'text-size': 9.5,
+          'text-offset': [0, 1.8],
+        },
+        paint: {
+          'text-color': '#f87171',
+          'text-halo-color': '#000',
+          'text-halo-width': 1.5,
+        },
+      });
+
+      this.map.on('click', 'conflict-dots', (e) => {
+        const p = e.features?.[0]?.properties;
+        if (p) {
+          this.onSelectIncident?.({
+            title: `FLASHPOINT // ${p.label}`,
+            location: `Severity: ${p.severity?.toUpperCase() || 'CRITICAL'}`,
+            summary: p.description || 'Active frontline geopolitical engagement zone.',
+            level: 'CRITICAL',
+          });
+        }
+      });
+    } catch (e) {
+      console.warn('[GlobeScene] Conflicts load failed:', e);
+    }
   }
 
   private async initEarthquakeLayer(): Promise<void> {
@@ -233,7 +508,6 @@ export class GlobeScene {
         data,
       });
 
-      // Earthquake glow
       this.map.addLayer({
         id: 'eq-glow',
         type: 'circle',
@@ -251,7 +525,6 @@ export class GlobeScene {
         },
       });
 
-      // Main earthquake circle
       this.map.addLayer({
         id: 'eq-circles',
         type: 'circle',
@@ -270,7 +543,6 @@ export class GlobeScene {
         },
       });
 
-      // Magnitude label
       this.map.addLayer({
         id: 'eq-label',
         type: 'symbol',
@@ -310,50 +582,13 @@ export class GlobeScene {
     }
   }
 
-  private initCablesLayer(): void {
-    const validCables = UNDERSEA_CABLES.filter((c) => c.points && c.points.length > 1);
-    const features = validCables.map((c) => ({
-      type: 'Feature' as const,
-      geometry: {
-        type: 'LineString' as const,
-        coordinates: c.points,
-      },
-      properties: {
-        id: c.id,
-        name: c.name,
-      },
-    }));
-
-    this.map.addSource('cables', {
-      type: 'geojson',
-      data: {
-        type: 'FeatureCollection',
-        features,
-      },
-    });
-
-    this.map.addLayer({
-      id: 'cables-layer',
-      type: 'line',
-      source: 'cables',
-      layout: {
-        'line-join': 'round',
-        'line-cap': 'round',
-      },
-      paint: {
-        'line-color': '#5eead4',
-        'line-width': ['interpolate', ['linear'], ['zoom'], 1, 1, 6, 1.8, 12, 2.5],
-        'line-opacity': 0.75,
-      },
-    });
-  }
-
   private initAirCorridorsLayer(): void {
     const airArcs = [
       { id: 'tpe-lax', name: '台北 - 洛杉磯 跨太平洋航空走廊', coords: [[121.23, 25.07], [140.0, 35.0], [-160.0, 45.0], [-135.0, 40.0], [-118.40, 33.94]] },
-      { id: 'tpe-nrt', name: '台北 - 東京成田 航線', coords: [[121.23, 25.07], [128.0, 30.0], [140.39, 35.77]] },
+      { id: 'tpe-nrt', name: '台北 - 東京成田 國際航線', coords: [[121.23, 25.07], [128.0, 30.0], [140.39, 35.77]] },
       { id: 'tpe-sin', name: '台北 - 新加坡 樟宜航線', coords: [[121.23, 25.07], [115.0, 15.0], [103.99, 1.36]] },
       { id: 'lhr-jfk', name: '北大西洋航路 NAT-Track', coords: [[-0.45, 51.47], [-30.0, 56.0], [-55.0, 48.0], [-73.77, 40.64]] },
+      { id: 'dxb-syd', name: '中東 - 澳洲遠程空運走廊', coords: [[55.36, 25.25], [80.0, 10.0], [115.0, -15.0], [151.17, -33.93]] },
     ];
 
     const features = airArcs.map((a) => ({
@@ -383,46 +618,12 @@ export class GlobeScene {
     });
   }
 
-  private initMaritimeLayer(): void {
-    const maritimeLines = [
-      { id: 'tw-strait', name: '台灣海峽戰略航道', coords: [[119.5, 23.0], [120.2, 24.5], [121.5, 26.0]] },
-      { id: 'malacca', name: '馬六甲海峽能源航道', coords: [[95.0, 5.5], [101.0, 2.5], [104.0, 1.2]] },
-      { id: 'suez', name: '蘇伊士運河航路', coords: [[32.3, 31.2], [32.5, 29.9]] },
-    ];
-
-    const features = maritimeLines.map((m) => ({
-      type: 'Feature' as const,
-      geometry: {
-        type: 'LineString' as const,
-        coordinates: m.coords,
-      },
-      properties: { id: m.id, name: m.name },
-    }));
-
-    this.map.addSource('maritime', {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features },
-    });
-
-    this.map.addLayer({
-      id: 'maritime-layer',
-      type: 'line',
-      source: 'maritime',
-      paint: {
-        'line-color': '#f59e0b',
-        'line-width': 1.5,
-        'line-dasharray': [4, 2],
-        'line-opacity': 0.75,
-      },
-    });
-  }
-
   private initTacticalControls(): void {
     const controls = document.createElement('div');
     controls.className = 'map-controls-tactical';
     controls.innerHTML = `
-      <button class="ctrl-btn active" id="btn-3d" title="3D Isometric Tactical View">🌐 3D</button>
-      <button class="ctrl-btn" id="btn-2d" title="2D Orthographic Top-Down View">👤 2D</button>
+      <button class="ctrl-btn active" id="btn-3d" title="3D Spherical Earth Globe">🌐 3D GLOBE</button>
+      <button class="ctrl-btn" id="btn-2d" title="2D Orthographic Map">👤 2D</button>
       <button class="ctrl-btn active" id="btn-map" title="Tactical Dark Vector Map">🌙 MAP</button>
       <button class="ctrl-btn" id="btn-sat" title="High-Res Satellite Imagery">🛰️ SAT</button>
     `;
@@ -434,15 +635,17 @@ export class GlobeScene {
     const btnSat = controls.querySelector('#btn-sat') as HTMLButtonElement;
 
     btn3d?.addEventListener('click', () => {
-      this.currentPitch = 50;
-      this.map.easeTo({ pitch: 50, duration: 600 });
+      this.currentProjection = 'globe';
+      (this.map as any).setProjection({ type: 'globe' });
+      this.map.easeTo({ pitch: 40, duration: 800 });
       btn3d.classList.add('active');
       btn2d.classList.remove('active');
     });
 
     btn2d?.addEventListener('click', () => {
-      this.currentPitch = 0;
-      this.map.easeTo({ pitch: 0, duration: 600 });
+      this.currentProjection = 'mercator';
+      (this.map as any).setProjection({ type: 'mercator' });
+      this.map.easeTo({ pitch: 0, duration: 800 });
       btn2d.classList.add('active');
       btn3d.classList.remove('active');
     });
@@ -473,9 +676,9 @@ export class GlobeScene {
     hud.innerHTML = `
       <span>CURSOR: <b id="hud-coords">25.0400, 121.5000</b></span>
       <span style="color:var(--border-active);">|</span>
-      <span>LOCATION: <b id="hud-location">Taipei, Taiwan</b></span>
+      <span>LOCATION: <b id="hud-location">Global Intelligence Sphere</b></span>
       <span style="color:var(--border-active);">|</span>
-      <span>ZOOM: <b id="hud-zoom">12.5</b></span>
+      <span>ZOOM: <b id="hud-zoom">2.3</b></span>
     `;
     this.container.appendChild(hud);
 
@@ -520,12 +723,12 @@ export class GlobeScene {
     this.rotateAnimationId = requestAnimationFrame(frame);
   }
 
-  public focusCoordinates(lat: number, lng: number, _altitude?: number): void {
+  public focusCoordinates(lat: number, lng: number, zoom = 12.5): void {
     this.map.flyTo({
       center: [lng, lat],
-      zoom: 12.5,
-      pitch: this.currentPitch,
-      duration: 1200,
+      zoom,
+      pitch: this.currentProjection === 'globe' ? 45 : 0,
+      duration: 1500,
     });
   }
 
@@ -548,7 +751,17 @@ export class GlobeScene {
       } else if (layerKey === 'sdk_air') {
         if (this.map.getLayer('air-layer')) this.map.setLayoutProperty('air-layer', 'visibility', vis);
       } else if (layerKey === 'maritime') {
-        if (this.map.getLayer('maritime-layer')) this.map.setLayoutProperty('maritime-layer', 'visibility', vis);
+        if (this.map.getLayer('maritime-ports-layer')) this.map.setLayoutProperty('maritime-ports-layer', 'visibility', vis);
+        if (this.map.getLayer('maritime-chokepoint-glow')) this.map.setLayoutProperty('maritime-chokepoint-glow', 'visibility', vis);
+        if (this.map.getLayer('maritime-chokepoints-layer')) this.map.setLayoutProperty('maritime-chokepoints-layer', 'visibility', vis);
+        if (this.map.getLayer('maritime-label')) this.map.setLayoutProperty('maritime-label', 'visibility', vis);
+      } else if (layerKey === 'live_news') {
+        if (this.map.getLayer('live-news-dots')) this.map.setLayoutProperty('live-news-dots', 'visibility', vis);
+        if (this.map.getLayer('live-news-label')) this.map.setLayoutProperty('live-news-label', 'visibility', vis);
+      } else if (layerKey === 'global_incidents') {
+        if (this.map.getLayer('conflict-glow')) this.map.setLayoutProperty('conflict-glow', 'visibility', vis);
+        if (this.map.getLayer('conflict-dots')) this.map.setLayoutProperty('conflict-dots', 'visibility', vis);
+        if (this.map.getLayer('conflict-label')) this.map.setLayoutProperty('conflict-label', 'visibility', vis);
       }
     } catch (e) {
       console.warn(`[GlobeScene] Toggle layer ${layerKey} error:`, e);

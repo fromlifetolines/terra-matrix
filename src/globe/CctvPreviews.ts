@@ -160,9 +160,14 @@ export class CctvPreviewsManager {
       `;
 
       // Preview Frame
+      let videoId = cam.videoId;
+      if (!videoId && cam.stream_url) {
+        const m = cam.stream_url.match(/(?:embed\/|v=|vi\/|youtu\.be\/|\/v\/)([a-zA-Z0-9_-]{11})/);
+        if (m) videoId = m[1];
+      }
       let mediaSrc = '';
-      if (cam.videoId) {
-        mediaSrc = `https://img.youtube.com/vi/${cam.videoId}/hqdefault.jpg`;
+      if (videoId) {
+        mediaSrc = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
       } else if (cam.feed_url) {
         mediaSrc = cam.feed_url;
       }

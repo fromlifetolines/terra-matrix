@@ -114,9 +114,13 @@ class TerraMatrixApp {
                   <input type="checkbox" id="layer-maritime" checked />
                   <span>🚢 海運航道 (Maritime)</span>
                 </label>
-                <label class="layer-toggle-item" title="Physical astronomical day/night solar terminator">
-                  <input type="checkbox" id="layer-day_night" checked />
-                  <span>☀️ 日夜晨昏 (Day/Night)</span>
+                <label class="layer-toggle-item" title="Global 24/7 Satellite Live TV News">
+                  <input type="checkbox" id="layer-live_news" checked />
+                  <span>📺 全球新聞 (Live TV)</span>
+                </label>
+                <label class="layer-toggle-item" title="Active Global Warzones & Flashpoints">
+                  <input type="checkbox" id="layer-global_incidents" checked />
+                  <span>⚠️ 地緣衝突 (Conflicts)</span>
                 </label>
               </div>
             </div>
@@ -215,13 +219,30 @@ class TerraMatrixApp {
       });
     };
 
-    // Handle News Click
-    this.globeScene.onSelectNews = (n: GeoNewsItem) => {
+    // Handle News Click: Auto-add to matrix and show tactical modal
+    this.globeScene.onSelectNews = (n: any) => {
+      let videoId = '';
+      if (n.url) {
+        const m = String(n.url).match(/(?:embed\/|v=|vi\/|youtu\.be\/|\/v\/)([a-zA-Z0-9_-]{11})/);
+        if (m) videoId = m[1];
+      }
+      if (videoId) {
+        this.streamMatrix.addChannel({
+          id: n.id,
+          name: n.source,
+          videoId,
+          city: n.city,
+          country: n.country,
+        });
+      }
+
       this.showInfoCard({
-        badge: 'FLASH INTEL',
+        badge: 'LIVE BROADCAST',
         badgeClass: 'MONITOR',
-        title: `${n.source} // ${n.city}`,
-        content: `${n.headline}<br/><span style="color: var(--text-dim); font-size: 10px;">Reported ${n.time}</span>`,
+        title: `${n.source} (${n.city || 'Global'}, ${n.country || 'Broadcast'})`,
+        content: `${n.headline || '24/7 Global Satellite News Broadcast'}<br/><span style="color: var(--accent-emerald);">● 已同步加入下方 Swiss Grid 播放矩陣</span>`,
+        actionLabel: n.url ? '↗️ OPEN BROADCAST' : undefined,
+        onAction: n.url ? () => window.open(n.url, '_blank') : undefined,
       });
     };
   }
@@ -302,8 +323,8 @@ class TerraMatrixApp {
     const resetBtn = document.getElementById('btn-reset-view');
     if (resetBtn) {
       resetBtn.addEventListener('click', () => {
-        // Reset to initial Taiwan / Taipei tactical perspective
-        this.globeScene.focusCoordinates(25.04, 121.50);
+        // Reset to initial 3D Earth space perspective
+        this.globeScene.focusCoordinates(25.04, 121.50, 2.3);
       });
     }
   }
