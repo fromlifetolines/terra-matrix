@@ -134,7 +134,7 @@ export const CCTV_PRESETS: CCTVPoint[] = [
 
 export const DEFAULT_MATRIX_CHANNELS: CCTVPoint[] = [
   CCTV_PRESETS[0], // 公視新聞台 PTS Live (wM0g8EoUZ_E)
-  CCTV_PRESETS[1], // 華視新聞 CTS Live CH52 (TL8MMGiF0hA)
-  CCTV_PRESETS[2], // 中視新聞 CTV Live (_GDAswKx6Cg)
+  CCTV_PRESETS[8], // DW News 24/7 International (LuKwFajn37U)
   CCTV_PRESETS[3], // 東京澀谷街頭 4K CCTV (4993sBLAzGA)
+  CCTV_PRESETS[7], // 紐約時代廣場 New York Times Square 4K (4qyZLflp-sI)
 ];

@@ -12,8 +12,8 @@ export interface MatrixChannel {
   country?: string;
 }
 
-const STORAGE_CHANNELS_KEY = 'terra_matrix_channels_v4';
-const STORAGE_LAYOUT_KEY = 'terra_matrix_layout_v4';
+const STORAGE_CHANNELS_KEY = 'terra_matrix_channels_v5';
+const STORAGE_LAYOUT_KEY = 'terra_matrix_layout_v5';
 
 export class StreamMatrix {
   private container: HTMLElement;
@@ -33,29 +33,29 @@ export class StreamMatrix {
 
   private loadState(): void {
     try {
-      // Check v4 storage first, fallback to v3/v2 with automatic migration
+      // Check v5 storage first, fallback to v4/v3 with automatic migration
       let savedChannels = localStorage.getItem(STORAGE_CHANNELS_KEY);
       if (!savedChannels) {
-        savedChannels = localStorage.getItem('terra_matrix_channels_v3') || localStorage.getItem('terra_matrix_channels_v2');
+        savedChannels = localStorage.getItem('terra_matrix_channels_v4') || localStorage.getItem('terra_matrix_channels_v3');
       }
 
       if (savedChannels) {
         let parsed: MatrixChannel[] = JSON.parse(savedChannels);
 
-        // Filter out broken feeds (e.g. Sydney Harbour, obsolete TTV)
+        // Filter out broken feeds
         parsed = parsed.filter(
           (ch) => ch.id !== 'sydney-harbour' && ch.videoId !== '7pcL-0Wo77U' && ch.videoId !== 'xL0ch83RAK8'
         );
 
         // Auto-migrate legacy channel IDs to 100% verified working streams
         parsed = parsed.map((ch) => {
-          if (ch.id === 'ttv-news') {
+          if (ch.id === 'ttv-news' || ch.id === 'cts-news' || ch.videoId === 'TL8MMGiF0hA') {
             return {
-              id: 'cts-news',
-              name: '華視新聞 CH52 CTS News Live',
-              videoId: 'TL8MMGiF0hA',
-              city: 'Taipei',
-              country: 'Taiwan',
+              id: 'dw-news',
+              name: 'DW News 24/7 International',
+              videoId: 'LuKwFajn37U',
+              city: 'Berlin',
+              country: 'Germany',
             };
           }
           if (ch.id === 'ctv-news' || ch.name.includes('中視')) {

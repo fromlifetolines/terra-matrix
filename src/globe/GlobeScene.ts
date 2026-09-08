@@ -2,6 +2,7 @@ import maplibregl, { type Map as MlMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type { EarthquakeItem } from './layers/EarthquakeLayer';
 import { CctvPreviewsManager } from './CctvPreviews';
+import { createSatelliteLayer, parseColor, type SatPoint } from './layers/SatelliteLayer';
 
 export interface GlobeLayerState {
   cctv: boolean;
@@ -11,6 +12,13 @@ export interface GlobeLayerState {
   day_night: boolean;
   maritime: boolean;
   sdk_air: boolean;
+  satellites: boolean;
+  sat_comms: boolean;
+  sat_military: boolean;
+  sat_navigation: boolean;
+  sat_earth: boolean;
+  sat_science: boolean;
+  weather: boolean;
 }
 
 export class GlobeScene {
@@ -26,6 +34,8 @@ export class GlobeScene {
   public onSelectIncident?: (incident: any) => void;
   public onSelectNews?: (news: any) => void;
   public onSelectFlight?: (flight: any) => void;
+  public onSelectSatellite?: (sat: any) => void;
+  public onSelectWeather?: (weather: any) => void;
 
   private currentStyle: 'dark' | 'sat' = 'dark';
   private currentProjection: 'globe' | 'mercator' = 'globe';
@@ -39,6 +49,11 @@ export class GlobeScene {
     military: any[];
   } = { commercial: [], private: [], jets: [], military: [] };
 
+  private satLayer?: ReturnType<typeof createSatelliteLayer>;
+  private satellitesRaw: any[] = [];
+  private currentRenderedSats: any[] = [];
+  private satFetchTimer?: number;
+
   private layerStates: GlobeLayerState = {
     cctv: true,
     live_news: true,
@@ -47,6 +62,13 @@ export class GlobeScene {
     day_night: true,
     maritime: true,
     sdk_air: true,
+    satellites: true,
+    sat_comms: true,
+    sat_military: true,
+    sat_navigation: true,
+    sat_earth: true,
+    sat_science: true,
+    weather: true,
   };
 
   constructor(container: HTMLElement) {
@@ -84,8 +106,8 @@ export class GlobeScene {
       this.initConflictsLayer();
       this.initEarthquakeLayer();
       this.initRealFlightsLayer();
-      this.initTacticalControls();
-      this.initTelemetryHUD();
+      this.initSatellites3DLayer();
+      this.initWeatherLayer();
 
       // Initialize floating CCTV preview cards
       this.previewManager = new CctvPreviewsManager(this.map, this.container, (cam) => {
@@ -787,6 +809,214 @@ export class GlobeScene {
     this.pushFlightFeaturesToMap();
   }
 
+  private initSatellites3DLayer(): void {
+    const baseUrl = import.meta.env.BASE_URL || '/';
+
+    try {
+      this.satLayer = createSatelliteLayer('satellites-3d');
+      this.map.addLayer(this.satLayer as any);
+    } catch (e) {
+      console.warn('[GlobeScene] Failed to add satellites-3d layer:', e);
+    }
+
+    // Map click picking for satellites
+    this.map.on('click', (e) => {
+      if (!this.layerStates.satellites || !this.satLayer) return;
+      const idx = this.satLayer.pick(e.point.x, e.point.y);
+      if (idx !== null && this.currentRenderedSats[idx]) {
+        const sat = this.currentRenderedSats[idx];
+        this.satLayer.setSelected(idx);
+        this.onSelectSatellite?.(sat);
+      }
+    });
+
+    // Cursor pointer on hover over satellites
+    this.map.on('mousemove', (e) => {
+      if (this.layerStates.satellites && this.satLayer) {
+        const idx = this.satLayer.pick(e.point.x, e.point.y);
+        if (idx !== null) {
+          this.map.getCanvas().style.cursor = 'pointer';
+        }
+      }
+    });
+
+    // Fetch satellite catalogue (1,336+ birds)
+    fetch(`${baseUrl}data/satellites.json`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && Array.isArray(data.satellites)) {
+          this.satellitesRaw = data.satellites;
+          this.updateSatellitesFilter();
+        }
+      })
+      .catch((err) => console.warn('[GlobeScene] Satellites fetch error:', err));
+  }
+
+  public updateSatellitesFilter(): void {
+    if (!this.satLayer) return;
+
+    if (!this.layerStates.satellites) {
+      this.satLayer.setPoints([]);
+      this.currentRenderedSats = [];
+      return;
+    }
+
+    const filtered = this.satellitesRaw.filter((s) => {
+      const cat = (s.category || '').toLowerCase();
+      if (cat === 'comms' && !this.layerStates.sat_comms) return false;
+      if (cat === 'military' && !this.layerStates.sat_military) return false;
+      if ((cat === 'navigation' || cat === 'nav') && !this.layerStates.sat_navigation) return false;
+      if ((cat === 'earth_obs' || cat === 'earth') && !this.layerStates.sat_earth) return false;
+      if (cat === 'science' && !this.layerStates.sat_science) return false;
+      return true;
+    });
+
+    this.currentRenderedSats = filtered;
+
+    const points: SatPoint[] = filtered.map((s) => {
+      const isStation = s.noradId === '25544' || s.noradId === '48274' || (s.name && s.name.includes('ISS'));
+      return {
+        lng: s.lng,
+        lat: s.lat,
+        altKm: s.alt || 450,
+        color: parseColor(s.color, 0x00e5ff),
+        size: isStation ? 3.2 : 1.2,
+      };
+    });
+
+    this.satLayer.setPoints(points);
+  }
+
+  public getSatellitesCounts(): Record<string, number> {
+    const counts = {
+      all: this.satellitesRaw.length || 1336,
+      comms: 0,
+      military: 0,
+      navigation: 0,
+      earth_obs: 0,
+      science: 0,
+    };
+    for (const s of this.satellitesRaw) {
+      const cat = (s.category || '').toLowerCase();
+      if (cat === 'comms') counts.comms++;
+      else if (cat === 'military') counts.military++;
+      else if (cat === 'navigation' || cat === 'nav') counts.navigation++;
+      else if (cat === 'earth_obs' || cat === 'earth') counts.earth_obs++;
+      else if (cat === 'science') counts.science++;
+    }
+    return counts;
+  }
+
+  private initWeatherLayer(): void {
+    const baseUrl = import.meta.env.BASE_URL || '/';
+
+    this.map.addSource('weather-source', {
+      type: 'geojson',
+      data: {
+        type: 'FeatureCollection',
+        features: [],
+      },
+    });
+
+    // Outer glow ring
+    this.map.addLayer({
+      id: 'weather-glow',
+      type: 'circle',
+      source: 'weather-source',
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 8, 5, 14, 10, 22],
+        'circle-color': [
+          'match',
+          ['get', 'severity'],
+          'high', '#ef4444',
+          'medium', '#f59e0b',
+          '#06b6d4',
+        ],
+        'circle-opacity': 0.35,
+        'circle-blur': 0.6,
+      },
+    });
+
+    // Core dot
+    this.map.addLayer({
+      id: 'weather-dots',
+      type: 'circle',
+      source: 'weather-source',
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 4, 5, 7, 10, 11],
+        'circle-color': [
+          'match',
+          ['get', 'severity'],
+          'high', '#ef4444',
+          'medium', '#f59e0b',
+          '#06b6d4',
+        ],
+        'circle-opacity': 0.95,
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#ffffff',
+        'circle-stroke-opacity': 0.9,
+      },
+    });
+
+    // Label
+    this.map.addLayer({
+      id: 'weather-label',
+      type: 'symbol',
+      source: 'weather-source',
+      minzoom: 3,
+      layout: {
+        'text-field': ['get', 'title'],
+        'text-size': 10,
+        'text-offset': [0, 1.6],
+        'text-max-width': 14,
+        'text-allow-overlap': false,
+      },
+      paint: {
+        'text-color': '#38bdf8',
+        'text-halo-color': '#000000',
+        'text-halo-width': 2,
+        'text-opacity': 0.95,
+      },
+    });
+
+    this.map.on('click', 'weather-dots', (e) => {
+      const feat = e.features?.[0];
+      if (feat && feat.properties) {
+        this.onSelectWeather?.(feat.properties);
+      }
+    });
+
+    this.map.on('mouseenter', 'weather-dots', () => {
+      this.map.getCanvas().style.cursor = 'pointer';
+    });
+    this.map.on('mouseleave', 'weather-dots', () => {
+      this.map.getCanvas().style.cursor = '';
+    });
+
+    fetch(`${baseUrl}data/weather.json`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && Array.isArray(data.events)) {
+          const geojson = {
+            type: 'FeatureCollection',
+            features: data.events.map((ev: any) => ({
+              type: 'Feature',
+              geometry: {
+                type: 'Point',
+                coordinates: [ev.lng, ev.lat],
+              },
+              properties: ev,
+            })),
+          };
+          const src = this.map.getSource('weather-source') as maplibregl.GeoJSONSource;
+          if (src) {
+            src.setData(geojson as any);
+          }
+        }
+      })
+      .catch((err) => console.warn('[GlobeScene] Weather fetch error:', err));
+  }
+
   private initTacticalControls(): void {
     const controls = document.createElement('div');
     controls.className = 'map-controls-tactical';
@@ -932,10 +1162,48 @@ export class GlobeScene {
         if (this.map.getLayer('conflict-glow')) this.map.setLayoutProperty('conflict-glow', 'visibility', vis);
         if (this.map.getLayer('conflict-dots')) this.map.setLayoutProperty('conflict-dots', 'visibility', vis);
         if (this.map.getLayer('conflict-label')) this.map.setLayoutProperty('conflict-label', 'visibility', vis);
+      } else if (
+        layerKey === 'satellites' ||
+        layerKey === 'sat_comms' ||
+        layerKey === 'sat_military' ||
+        layerKey === 'sat_navigation' ||
+        layerKey === 'sat_earth' ||
+        layerKey === 'sat_science'
+      ) {
+        this.updateSatellitesFilter();
+      } else if (layerKey === 'weather') {
+        if (this.map.getLayer('weather-dots')) this.map.setLayoutProperty('weather-dots', 'visibility', vis);
+        if (this.map.getLayer('weather-glow')) this.map.setLayoutProperty('weather-glow', 'visibility', vis);
+        if (this.map.getLayer('weather-label')) this.map.setLayoutProperty('weather-label', 'visibility', vis);
       }
     } catch (e) {
       console.warn(`[GlobeScene] Toggle layer ${layerKey} error:`, e);
     }
+  }
+
+  public setProjection(proj: 'globe' | 'mercator'): void {
+    this.currentProjection = proj;
+    try {
+      (this.map as any).setProjection({ type: proj });
+      this.map.easeTo({ pitch: proj === 'globe' ? 40 : 0, duration: 800 });
+    } catch (e) {
+      console.warn('[GlobeScene] setProjection error:', e);
+    }
+  }
+
+  public setBaseStyle(style: 'dark' | 'sat'): void {
+    this.currentStyle = style;
+    if (this.map.getLayer('satellite-layer')) {
+      this.map.setLayoutProperty('satellite-layer', 'visibility', style === 'sat' ? 'visible' : 'none');
+    }
+  }
+
+  public getMap(): MlMap {
+    return this.map;
+  }
+
+  public getLayerStates(): GlobeLayerState {
+    return this.layerStates;
   }
 
   private onResize = (): void => {

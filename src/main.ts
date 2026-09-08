@@ -1,14 +1,19 @@
 import './styles/main.css';
 import { GlobeScene } from './globe/GlobeScene';
 import { StreamMatrix } from './matrix/StreamMatrix';
-import type { CCTVPoint } from './data/cctv-presets';
+import { SpaceCamPanel } from './components/SpaceCam';
+import { SpaceTrackingPanel, type SatelliteSublayerState } from './components/SpaceTrackingPanel';
+import { SatelliteCardModal } from './components/SatelliteCard';
 import type { EarthquakeItem } from './globe/layers/EarthquakeLayer';
-import type { GeoIncident, GeoNewsItem } from './data/incidents-news';
+import type { GeoIncident } from './data/incidents-news';
 
 class TerraMatrixApp {
   private globeScene!: GlobeScene;
   private streamMatrix!: StreamMatrix;
-  private infoCardEl: HTMLElement | null = null;
+  private spaceCamPanel!: SpaceCamPanel;
+  private spaceTrackingPanel!: SpaceTrackingPanel;
+  private satelliteCardModal?: SatelliteCardModal;
+  private autoRotate = false;
 
   constructor() {
     try {
@@ -32,8 +37,10 @@ class TerraMatrixApp {
     try {
       this.initClock();
       this.initHeaderActions();
+      this.initRails();
+      this.initPanels();
     } catch (e) {
-      console.error('[TerraMatrixApp] Header actions initialization failed:', e);
+      console.error('[TerraMatrixApp] Controls initialization failed:', e);
     }
   }
 
@@ -42,29 +49,35 @@ class TerraMatrixApp {
     if (!appEl) return;
 
     appEl.innerHTML = `
-      <!-- Top Tactical Header -->
+      <!-- Top Osiris Tactical Header -->
       <header class="terra-header">
         <div class="header-left">
           <div class="brand-badge">
             <span class="status-dot-emerald"></span>
-            DEFCON 5 // STANDBY
+            STATUS: LIVE
           </div>
-          <div class="brand-title">TERRA MATRIX</div>
-          <div class="brand-subtitle">// SITUATION INTELLIGENCE COMMAND</div>
+          <div class="brand-title" style="display:flex;align-items:center;gap:8px;">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--accent-cyan)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <span>TERRA MATRIX</span>
+          </div>
+          <div class="brand-subtitle">// SITUATION INTELLIGENCE COMMAND <span style="color:var(--accent-cyan);font-weight:700;">V.4.1</span></div>
         </div>
 
         <div class="header-center">
           <div class="header-metric">
-            <span>SEISMIC:</span>
-            <span class="metric-val" id="header-quake-count">USGS LIVE</span>
+            <span>LAYERS:</span>
+            <span class="metric-val" style="color:var(--accent-cyan);">26 ACTIVE</span>
           </div>
           <div class="header-metric">
-            <span>FLIGHTS:</span>
-            <span class="metric-val" id="header-flights-count" style="color: #38bdf8;">7,000+ RADAR</span>
+            <span>ENTITIES:</span>
+            <span class="metric-val" style="color:var(--accent-emerald);">47,861+ DETECTED</span>
           </div>
           <div class="header-metric">
-            <span>INTEL FEEDS:</span>
-            <span class="metric-val" style="color: var(--accent-emerald);">ACTIVE</span>
+            <span>SOLAR:</span>
+            <span class="metric-val" style="color:var(--accent-amber);">Kp0 // QUIET</span>
           </div>
         </div>
 
@@ -77,54 +90,100 @@ class TerraMatrixApp {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="12 8 8 12 12 16 12 8"/></svg>
             RESET VIEW
           </button>
-          <div class="tpe-clock" id="tpe-clock">0000-00-00 00:00:00 TPE</div>
+          <div class="tpe-clock" style="display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:11px;">
+            <span id="zulu-clock" style="color:var(--text-muted);">ZULU 00:00:00 UTC</span>
+            <span style="color:var(--border-active);">|</span>
+            <span id="tpe-clock" style="color:var(--accent-emerald);font-weight:700;">0000-00-00 00:00:00 TPE</span>
+          </div>
         </div>
       </header>
 
-      <!-- Workspace: 3D Globe + Floating Pill (Top) & Live Stream Matrix (Bottom) -->
+      <!-- Workspace: 3D Globe + Left & Right Rails + Floating Panels & Bottom Stream Matrix -->
       <main class="terra-workspace">
-        <section class="globe-wrapper">
+        <section class="globe-wrapper" id="globe-wrapper">
           <div id="globe-container"></div>
 
-          <!-- Minimal Floating Glass Pill (Top Left Intelligence Layer Controller) -->
-          <div class="glass-pill-container">
-            <div class="glass-pill">
-              <div class="pill-header">
-                <span class="pill-title">INTELLIGENCE LAYERS</span>
-                <span style="font-family: var(--font-mono); font-size: 9px; color: var(--accent-emerald);">6 ACTIVE</span>
-              </div>
-              <div class="pill-layers-list">
-                <label class="layer-toggle-item" title="Global live flights & ADS-B radar tracking">
-                  <input type="checkbox" id="layer-sdk_air" checked />
-                  <span>✈️ 即時航班 (Live Flights)</span>
-                </label>
-                <label class="layer-toggle-item" title="USGS real-time earthquake ripples">
-                  <input type="checkbox" id="layer-earthquakes" checked />
-                  <span>🌋 即時地震 (Earthquakes)</span>
-                </label>
-                <label class="layer-toggle-item" title="Global live cameras and webcams">
-                  <input type="checkbox" id="layer-cctv" checked />
-                  <span>📹 即時影像 (CCTV)</span>
-                </label>
-                <label class="layer-toggle-item" title="Strategic maritime shipping corridors">
-                  <input type="checkbox" id="layer-maritime" checked />
-                  <span>🚢 海運航道 (Maritime)</span>
-                </label>
-                <label class="layer-toggle-item" title="Global 24/7 Satellite Live TV News">
-                  <input type="checkbox" id="layer-live_news" checked />
-                  <span>📺 全球新聞 (Live TV)</span>
-                </label>
-                <label class="layer-toggle-item" title="Active Global Warzones & Flashpoints">
-                  <input type="checkbox" id="layer-global_incidents" checked />
-                  <span>⚠️ 地緣衝突 (Conflicts)</span>
-                </label>
-              </div>
-            </div>
+          <!-- Left Vertical Category Rail (Osiris Domain Navigation) -->
+          <div class="left-category-rail">
+            <button class="category-rail-btn active" id="cat-btn-cyber" title="Cyber Threat Telemetry">
+              <span class="category-rail-icon">⚡</span>
+              <span>CYBER</span>
+            </button>
+            <button class="category-rail-btn active" id="cat-btn-air" title="Live ADS-B Radar Air Traffic">
+              <span class="category-rail-icon">✈️</span>
+              <span>AIR (7K+)</span>
+            </button>
+            <button class="category-rail-btn active" id="cat-btn-sea" title="Strategic Maritime Corridors">
+              <span class="category-rail-icon">🚢</span>
+              <span>SEA</span>
+            </button>
+            <button class="category-rail-btn active" id="cat-btn-space" title="Space Tracking & Orbiting Satellites">
+              <span class="category-rail-icon">🛰️</span>
+              <span>SPACE (1.3K)</span>
+            </button>
+            <button class="category-rail-btn active" id="cat-btn-cctv" title="Global CCTV Surveillance Network">
+              <span class="category-rail-icon">📹</span>
+              <span>CCTV</span>
+            </button>
+            <button class="category-rail-btn active" id="cat-btn-weather" title="Global Severe Weather & Cyclones">
+              <span class="category-rail-icon">🌪️</span>
+              <span>WEATHER</span>
+            </button>
+            <button class="category-rail-btn active" id="cat-btn-conflicts" title="Global Warzone Flashpoints">
+              <span class="category-rail-icon">⚠️</span>
+              <span>WARZONES</span>
+            </button>
           </div>
 
-          <!-- Dynamic Info Card Modal (Bottom Left) -->
+          <!-- Right Tactical Action Rail -->
+          <div class="right-tactical-rail">
+            <button class="tactical-rail-btn active" id="rail-btn-3d" title="3D Spherical Earth Globe">
+              <span>🌐</span> 3D GLOBE
+            </button>
+            <button class="tactical-rail-btn" id="rail-btn-2d" title="2D Mercator Flat Map">
+              <span>🗺️</span> 2D FLAT
+            </button>
+            <button class="tactical-rail-btn active" id="rail-btn-map" title="Tactical Dark Vector Map">
+              <span>🌙</span> MAP
+            </button>
+            <button class="tactical-rail-btn" id="rail-btn-sat" title="NASA/ArcGIS Satellite Earth">
+              <span>🛰️</span> SAT
+            </button>
+            <button class="tactical-rail-btn active" id="rail-btn-sat-drawer" title="Toggle Space Tracking Drawer">
+              <span>📡</span> TRACKING
+            </button>
+            <button class="tactical-rail-btn active" id="rail-btn-iss-cam" title="Toggle 24/7 ISS Live Cam">
+              <span>📹</span> ISS CAM
+            </button>
+            <button class="tactical-rail-btn" id="rail-btn-target" title="Focus Taiwan HQ Command">
+              <span>🎯</span> TAIWAN HQ
+            </button>
+          </div>
+
+          <!-- Dynamic Info Card Modal -->
           <div id="globe-info-container"></div>
         </section>
+
+        <!-- Bottom Telemetry & Marquee Bar -->
+        <div class="telemetry-marquee-bar">
+          <div class="telemetry-left">
+            <span>CURSOR: <b id="bar-coords" class="telemetry-val">25.0400, 121.5000</b></span>
+            <span>LOCATION: <b id="bar-location" class="telemetry-val">Taipei HQ / Global Intelligence Sphere</b></span>
+            <span>ZOOM: <b id="bar-zoom" class="telemetry-val">2.3</b></span>
+          </div>
+          <div class="marquee-container">
+            <div class="marquee-content" id="marquee-ticker">
+              <span class="marquee-item"><span class="marquee-tag tag-solar">SOLAR FLUX</span> Kp 0 // Geomagnetic field quiet</span>
+              <span class="marquee-item"><span class="marquee-tag tag-crypto">BTC/USD</span> $78,320.00 ▲ +2.4%</span>
+              <span class="marquee-item"><span class="marquee-tag tag-crypto">ETH/USD</span> $2,542.80 ▲ +3.1%</span>
+              <span class="marquee-item"><span class="marquee-tag tag-crypto">SOL/USD</span> $188.50 ▲ +5.8%</span>
+              <span class="marquee-item"><span class="marquee-tag tag-quake">USGS M6.8</span> Kamchatka Peninsula Depth 33km</span>
+              <span class="marquee-item"><span class="marquee-tag tag-quake">USGS M5.4</span> Hualien County, Taiwan Depth 18km</span>
+              <span class="marquee-item"><span class="marquee-tag tag-quake">USGS M5.9</span> Tonga Trench Depth 10km</span>
+              <span class="marquee-item"><span class="marquee-tag tag-solar">DEFCON 5</span> Normal Readiness // All orbital telemetry nominal</span>
+            </div>
+          </div>
+        </div>
 
         <!-- Live Stream Matrix Panel (Swiss Grid) -->
         <section class="matrix-wrapper" id="matrix-container"></section>
@@ -138,27 +197,24 @@ class TerraMatrixApp {
 
     this.globeScene = new GlobeScene(container);
 
-    // Layer checkboxes
-    const layerKeys = [
-      'cctv',
-      'live_news',
-      'earthquakes',
-      'global_incidents',
-      'day_night',
-      'maritime',
-      'sdk_air',
-    ] as const;
+    // Update coordinates in bottom bar on mouse movement
+    const map = this.globeScene.getMap();
+    const coordsEl = document.getElementById('bar-coords');
+    const zoomEl = document.getElementById('bar-zoom');
 
-    layerKeys.forEach((key) => {
-      const checkbox = document.getElementById(`layer-${key}`) as HTMLInputElement | null;
-      if (checkbox) {
-        checkbox.addEventListener('change', () => {
-          this.globeScene.toggleLayer(key, checkbox.checked);
-        });
+    map.on('mousemove', (e) => {
+      if (coordsEl) {
+        coordsEl.textContent = `${e.lngLat.lat.toFixed(4)}, ${e.lngLat.lng.toFixed(4)}`;
       }
     });
 
-    // Handle CCTV Click: Auto-add to matrix and show tactical notification
+    map.on('zoom', () => {
+      if (zoomEl) {
+        zoomEl.textContent = map.getZoom().toFixed(1);
+      }
+    });
+
+    // Handle CCTV Click: Auto-add to matrix and show tactical modal
     this.globeScene.onSelectCctv = (pt: any) => {
       this.streamMatrix.addChannel({
         id: pt.id,
@@ -214,7 +270,7 @@ class TerraMatrixApp {
       });
     };
 
-    // Handle News Click: Auto-add to matrix and show tactical modal
+    // Handle News Click
     this.globeScene.onSelectNews = (n: any) => {
       let videoId = '';
       if (n.url) {
@@ -269,6 +325,147 @@ class TerraMatrixApp {
         `,
       });
     };
+
+    // Handle 3D Satellite Click: Show High-Tech Satellite Dossier Modal
+    this.globeScene.onSelectSatellite = (sat: any) => {
+      const globeWrapper = document.getElementById('globe-wrapper');
+      if (!globeWrapper) return;
+      if (this.satelliteCardModal) {
+        // close existing
+        const existing = globeWrapper.querySelector('.satellite-detail-card');
+        if (existing) existing.remove();
+      }
+      this.satelliteCardModal = new SatelliteCardModal(globeWrapper, sat, () => {
+        this.satelliteCardModal = undefined;
+      });
+    };
+
+    // Handle Weather Event Click: Severe Cyclone / Storm Alert
+    this.globeScene.onSelectWeather = (ev: any) => {
+      this.showInfoCard({
+        badge: `${String(ev.severity || 'SEVERE').toUpperCase()} // WEATHER ALERT`,
+        badgeClass: ev.severity === 'high' ? 'CRITICAL' : 'ELEVATED',
+        title: ev.title,
+        content: `
+          <div style="margin-bottom:6px;font-size:11px;">
+            <div><strong>Type:</strong> ${ev.type || 'Tropical Cyclone'}</div>
+            <div><strong>Provider:</strong> ${ev.provider || 'NASA EONET'}</div>
+            <div><strong>Date:</strong> ${ev.date || 'Active Alert'}</div>
+            ${ev.area ? `<div><strong>Affected Region:</strong> ${ev.area}</div>` : ''}
+          </div>
+          <div style="color:var(--accent-sky);">● 氣象衛星即時動態追蹤中</div>
+        `,
+        actionLabel: ev.source ? '↗️ VIEW NOAA / EONET ADVISORY' : undefined,
+        onAction: ev.source ? () => window.open(ev.source, '_blank') : undefined,
+      });
+    };
+  }
+
+  private initRails(): void {
+    // Left Category Rail buttons
+    const bindCat = (id: string, layerKey: Parameters<GlobeScene['toggleLayer']>[0]) => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      btn.addEventListener('click', () => {
+        const isActive = btn.classList.contains('active');
+        const next = !isActive;
+        btn.classList.toggle('active', next);
+        this.globeScene.toggleLayer(layerKey, next);
+      });
+    };
+
+    bindCat('cat-btn-air', 'sdk_air');
+    bindCat('cat-btn-sea', 'maritime');
+    bindCat('cat-btn-cctv', 'cctv');
+    bindCat('cat-btn-weather', 'weather');
+    bindCat('cat-btn-conflicts', 'global_incidents');
+
+    // Cyber dummy notification
+    document.getElementById('cat-btn-cyber')?.addEventListener('click', (e) => {
+      const btn = e.currentTarget as HTMLElement;
+      btn.classList.toggle('active');
+      this.showInfoCard({
+        badge: 'CYBER TELEMETRY ACTIVE',
+        badgeClass: 'MONITOR',
+        title: 'BGP & Undersea Cable Routing Monitor',
+        content: 'Autonomous cyber defense nodes online. Zero abnormal BGP route hijackings detected in Asia-Pacific sector.',
+      });
+    });
+
+    // Space button opens Space Tracking Drawer
+    document.getElementById('cat-btn-space')?.addEventListener('click', () => {
+      this.spaceTrackingPanel.toggle();
+    });
+
+    // Right Tactical Action Rail buttons
+    const btn3d = document.getElementById('rail-btn-3d');
+    const btn2d = document.getElementById('rail-btn-2d');
+    const btnMap = document.getElementById('rail-btn-map');
+    const btnSat = document.getElementById('rail-btn-sat');
+    const btnSatDrawer = document.getElementById('rail-btn-sat-drawer');
+    const btnIssCam = document.getElementById('rail-btn-iss-cam');
+    const btnTarget = document.getElementById('rail-btn-target');
+
+    btn3d?.addEventListener('click', () => {
+      this.globeScene.setProjection('globe');
+      btn3d.classList.add('active');
+      btn2d?.classList.remove('active');
+    });
+
+    btn2d?.addEventListener('click', () => {
+      this.globeScene.setProjection('mercator');
+      btn2d.classList.add('active');
+      btn3d?.classList.remove('active');
+    });
+
+    btnMap?.addEventListener('click', () => {
+      this.globeScene.setBaseStyle('dark');
+      btnMap.classList.add('active');
+      btnSat?.classList.remove('active');
+    });
+
+    btnSat?.addEventListener('click', () => {
+      this.globeScene.setBaseStyle('sat');
+      btnSat.classList.add('active');
+      btnMap?.classList.remove('active');
+    });
+
+    btnSatDrawer?.addEventListener('click', () => {
+      this.spaceTrackingPanel.toggle();
+    });
+
+    btnIssCam?.addEventListener('click', () => {
+      this.spaceCamPanel.toggle();
+      btnIssCam.classList.toggle('active');
+    });
+
+    btnTarget?.addEventListener('click', () => {
+      this.globeScene.focusCoordinates(25.04, 121.50, 7.5);
+    });
+  }
+
+  private initPanels(): void {
+    const globeWrapper = document.getElementById('globe-wrapper');
+    if (!globeWrapper) return;
+
+    // 1. Mount 24/7 Live SpaceCam Panel (top-right)
+    this.spaceCamPanel = new SpaceCamPanel(globeWrapper);
+
+    // 2. Mount Space Tracking Left Drawer
+    this.spaceTrackingPanel = new SpaceTrackingPanel(globeWrapper, (state: SatelliteSublayerState) => {
+      this.globeScene.toggleLayer('satellites', state.all);
+      this.globeScene.toggleLayer('sat_comms', state.comms);
+      this.globeScene.toggleLayer('sat_military', state.military);
+      this.globeScene.toggleLayer('sat_navigation', state.navigation);
+      this.globeScene.toggleLayer('sat_earth', state.earth_obs);
+      this.globeScene.toggleLayer('sat_science', state.science);
+    });
+
+    // Update counts when satellites load
+    setTimeout(() => {
+      const counts = this.globeScene.getSatellitesCounts();
+      this.spaceTrackingPanel.setCounts(counts);
+    }, 1500);
   }
 
   private initMatrix(): void {
@@ -316,16 +513,27 @@ class TerraMatrixApp {
   }
 
   private initClock(): void {
-    const clockEl = document.getElementById('tpe-clock');
+    const tpeClockEl = document.getElementById('tpe-clock');
+    const zuluClockEl = document.getElementById('zulu-clock');
+
     const update = () => {
-      if (clockEl) {
-        const tpeTime = new Date().toLocaleString('en-US', { 
-          timeZone: 'Asia/Taipei', 
-          hour12: false, 
-          year: 'numeric', month: '2-digit', day: '2-digit',
-          hour: '2-digit', minute: '2-digit', second: '2-digit'
+      const now = new Date();
+      if (tpeClockEl) {
+        const tpeTime = now.toLocaleString('en-US', {
+          timeZone: 'Asia/Taipei',
+          hour12: false,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
         }) + ' TPE';
-        clockEl.textContent = tpeTime;
+        tpeClockEl.textContent = tpeTime;
+      }
+      if (zuluClockEl) {
+        const zuluTime = now.toISOString().substring(11, 19) + ' UTC';
+        zuluClockEl.textContent = `ZULU ${zuluTime}`;
       }
     };
     update();
@@ -333,21 +541,19 @@ class TerraMatrixApp {
   }
 
   private initHeaderActions(): void {
-    let autoRotate = false;
     const rotateBtn = document.getElementById('btn-auto-rotate');
     if (rotateBtn) {
       rotateBtn.style.color = 'var(--text-dim)';
       rotateBtn.addEventListener('click', () => {
-        autoRotate = !autoRotate;
-        this.globeScene.setAutoRotate(autoRotate);
-        rotateBtn.style.color = autoRotate ? 'var(--accent-emerald)' : 'var(--text-dim)';
+        this.autoRotate = !this.autoRotate;
+        this.globeScene.setAutoRotate(this.autoRotate);
+        rotateBtn.style.color = this.autoRotate ? 'var(--accent-emerald)' : 'var(--text-dim)';
       });
     }
 
     const resetBtn = document.getElementById('btn-reset-view');
     if (resetBtn) {
       resetBtn.addEventListener('click', () => {
-        // Reset to initial 3D Earth space perspective
         this.globeScene.focusCoordinates(25.04, 121.50, 2.3);
       });
     }
