@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "globe.gl": "^2.46.2",
+    "maplibre-gl": "^5.24.0",
     "three": "0.185.1"
   },
   "devDependencies": {

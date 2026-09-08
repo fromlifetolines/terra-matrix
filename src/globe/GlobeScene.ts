@@ -1,9 +1,9 @@
-import Globe, { type GlobeInstance } from 'globe.gl';
-import * as THREE from 'three';
-import { CCTV_PRESETS, type CCTVPoint } from '../data/cctv-presets';
+import maplibregl, { type Map as MlMap } from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import { ALL_CCTV_CAMERAS, type CctvCamera } from '../data/cctv-cameras';
 import { UNDERSEA_CABLES } from '../data/cables';
 import type { EarthquakeItem } from './layers/EarthquakeLayer';
-import type { GeoIncident, GeoNewsItem } from '../data/incidents-news';
+import { CctvPreviewsManager } from './CctvPreviews';
 
 export interface GlobeLayerState {
   cctv: boolean;
@@ -18,15 +18,19 @@ export interface GlobeLayerState {
 
 export class GlobeScene {
   private container: HTMLElement;
-  private globe!: GlobeInstance;
-  private earthquakes: EarthquakeItem[] = [];
-  private cloudsMesh?: THREE.Mesh;
+  private map!: MlMap;
+  private previewManager?: CctvPreviewsManager;
   private isDestroyed = false;
+  private autoRotate = false;
+  private rotateAnimationId?: number;
 
-  public onSelectCctv?: (point: CCTVPoint) => void;
+  public onSelectCctv?: (camera: any) => void;
   public onSelectEarthquake?: (quake: EarthquakeItem) => void;
-  public onSelectIncident?: (incident: GeoIncident) => void;
-  public onSelectNews?: (news: GeoNewsItem) => void;
+  public onSelectIncident?: (incident: any) => void;
+  public onSelectNews?: (news: any) => void;
+
+  private currentStyle: 'dark' | 'sat' = 'dark';
+  private currentPitch: 50 | 0 = 50;
 
   private layerStates: GlobeLayerState = {
     cctv: true,
@@ -41,336 +45,527 @@ export class GlobeScene {
 
   constructor(container: HTMLElement) {
     this.container = container;
-    this.initGlobe();
-    void this.fetchEarthquakes();
+    this.initMap();
   }
 
-  private initGlobe(): void {
-    const createGlobe = Globe as unknown as (config?: any) => (el: HTMLElement) => GlobeInstance;
-    
-    // Step 1 & 2: Local bundled NASA textures via dynamic Base URL
-    const baseUrl = import.meta.env.BASE_URL || '/';
-    const globeImageUrl = `${baseUrl}earth-blue-marble.jpg`;
-    const bumpImageUrl = `${baseUrl}earth-topology.png`;
-    const nightLightsUrl = `${baseUrl}earth-night.jpg`;
-    const waterSpecularUrl = `${baseUrl}earth-water.png`;
-    const cloudsUrl = `${baseUrl}earth-clouds.png`;
+  private initMap(): void {
+    // Style: CartoDB Dark Matter vector style (crisp streets, highways, district labels)
+    const styleUrl = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
 
-    // Safe procedural fallback texture generator
-    const createFallbackTexture = (color = '#0b1d3a'): THREE.CanvasTexture => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 1024;
-      canvas.height = 512;
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.fillStyle = color;
-        ctx.fillRect(0, 0, 1024, 512);
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-        ctx.lineWidth = 1;
-        for (let x = 0; x <= 1024; x += 64) {
-          ctx.beginPath();
-          ctx.moveTo(x, 0);
-          ctx.lineTo(x, 512);
-          ctx.stroke();
-        }
-        for (let y = 0; y <= 512; y += 64) {
-          ctx.beginPath();
-          ctx.moveTo(0, y);
-          ctx.lineTo(1024, y);
-          ctx.stroke();
-        }
-      }
-      const tex = new THREE.CanvasTexture(canvas);
-      tex.wrapS = THREE.RepeatWrapping;
-      tex.wrapT = THREE.ClampToEdgeWrapping;
-      return tex;
-    };
-
-    // CORS & Safe Texture Loader
-    const texLoader = new THREE.TextureLoader();
-    texLoader.setCrossOrigin('anonymous');
-
-    const loadSafeTexture = (
-      url: string,
-      fallbackColor = '#0b1d3a',
-      onLoaded?: (t: THREE.Texture) => void
-    ): THREE.Texture => {
-      return texLoader.load(
-        url,
-        (tex) => {
-          tex.anisotropy = 16;
-          tex.minFilter = THREE.LinearMipmapLinearFilter;
-          tex.magFilter = THREE.LinearFilter;
-          tex.generateMipmaps = true;
-          tex.needsUpdate = true;
-          onLoaded?.(tex);
-        },
-        undefined,
-        (err) => {
-          console.warn(`[GlobeScene] Texture load failed for ${url}, fallback to canvas:`, err);
-          const fallback = createFallbackTexture(fallbackColor);
-          fallback.anisotropy = 16;
-          fallback.minFilter = THREE.LinearMipmapLinearFilter;
-          fallback.magFilter = THREE.LinearFilter;
-          fallback.generateMipmaps = true;
-          fallback.needsUpdate = true;
-          onLoaded?.(fallback);
-        }
-      );
-    };
-
-    const initialWidth = this.container.clientWidth || window.innerWidth;
-    const initialHeight = this.container.clientHeight || Math.floor(window.innerHeight * 0.55);
-
-    this.globe = createGlobe({
-      rendererConfig: {
-        antialias: true,
-        alpha: false,
-        powerPreference: 'high-performance',
-      },
-    })(this.container)
-      .globeImageUrl(globeImageUrl)
-      .bumpImageUrl(bumpImageUrl)
-      .backgroundColor('#050507')
-      .atmosphereColor('#3a82f7')
-      .atmosphereAltitude(0.2)
-      .width(initialWidth)
-      .height(initialHeight);
-
-    // Camera initial position check: camera.position.set(0, 0, 300)
-    const camera = this.globe.camera() as THREE.PerspectiveCamera;
-    if (camera) {
-      camera.position.set(0, 0, 300);
-      camera.lookAt(0, 0, 0);
-      camera.updateProjectionMatrix();
-    }
-
-    // Enhance globe material once ready
-    this.globe.onGlobeReady(() => {
-      const mat = this.globe.globeMaterial() as THREE.MeshPhongMaterial;
-      if (mat) {
-        if (mat.map) {
-          mat.map.anisotropy = 16;
-          mat.map.minFilter = THREE.LinearMipmapLinearFilter;
-          mat.map.magFilter = THREE.LinearFilter;
-          mat.map.generateMipmaps = true;
-          mat.map.needsUpdate = true;
-        }
-
-        // Apply specular reflection on ocean
-        loadSafeTexture(waterSpecularUrl, '#000000', (specTex) => {
-          mat.specularMap = specTex;
-          mat.specular = new THREE.Color(0x334455);
-          mat.shininess = 22;
-          mat.needsUpdate = true;
-        });
-
-        // Apply night city lights
-        loadSafeTexture(nightLightsUrl, '#000000', (nightTex) => {
-          mat.emissiveMap = nightTex;
-          mat.emissive = new THREE.Color(0x888888);
-          mat.emissiveIntensity = 0.4;
-          mat.needsUpdate = true;
-        });
-      }
+    this.map = new maplibregl.Map({
+      container: this.container,
+      style: styleUrl,
+      center: [121.50, 25.04], // Center on Taipei / New Taipei City
+      zoom: 12.5,
+      minZoom: 1.5,
+      maxZoom: 18,
+      pitch: 50, // 3D perspective pitch matching Osiris
+      bearing: 0,
+      attributionControl: false,
+      maxPitch: 85,
     });
 
-    // Cloud layer with safe loader
-    loadSafeTexture(cloudsUrl, '#ffffff', (cloudsTexture) => {
-      const globeRadius = this.globe.getGlobeRadius ? this.globe.getGlobeRadius() : 100;
-      const cloudsGeo = new THREE.SphereGeometry(globeRadius * 1.006, 75, 75);
-      const cloudsMat = new THREE.MeshPhongMaterial({
-        map: cloudsTexture,
-        transparent: true,
-        opacity: 0.55,
-        depthWrite: false,
+    // Disable auto-rotation by default! User has 100% stable control
+    this.autoRotate = false;
+
+    // Stop any rotation if user interacts
+    this.map.on('dragstart', () => { this.setAutoRotate(false); });
+    this.map.on('touchstart', () => { this.setAutoRotate(false); });
+    this.map.on('wheel', () => { this.setAutoRotate(false); });
+
+    this.map.on('load', () => {
+      this.initSatelliteLayer();
+      this.initCctvLayer();
+      this.initEarthquakeLayer();
+      this.initCablesLayer();
+      this.initAirCorridorsLayer();
+      this.initMaritimeLayer();
+      this.initTacticalControls();
+      this.initTelemetryHUD();
+
+      // Initialize floating CCTV preview cards
+      this.previewManager = new CctvPreviewsManager(this.map, this.container, (cam) => {
+        this.handleCctvClick(cam);
       });
 
-      this.cloudsMesh = new THREE.Mesh(cloudsGeo, cloudsMat);
-      this.globe.scene().add(this.cloudsMesh);
-
-      const rotateClouds = () => {
-        if (this.isDestroyed) return;
-        if (this.cloudsMesh) {
-          this.cloudsMesh.rotation.y += 0.0003;
-        }
-        requestAnimationFrame(rotateClouds);
-      };
-      rotateClouds();
+      // Trigger resize after layout settles
+      setTimeout(() => this.map.resize(), 100);
+      setTimeout(() => this.map.resize(), 500);
     });
-
-    this.globe
-      .pointLat((d: any) => d.lat)
-      .pointLng((d: any) => (d.lon !== undefined ? d.lon : d.lng))
-      .pointColor((d: any) => (d.type === 'cctv' ? '#06b6d4' : d.mag >= 6 ? '#ef4444' : '#f59e0b'))
-      .pointAltitude((d: any) => (d.type === 'cctv' ? 0.02 : 0.015))
-      .pointRadius((d: any) => (d.type === 'cctv' ? 0.45 : Math.max(0.3, (d.mag || 3) * 0.12)))
-      .pointLabel((d: any) => {
-        const labelText = d.id === 'tokyo-shibuya' ? '東京澀谷十字路口' : d.name;
-        if (d.type === 'cctv') {
-          return `<div style="background: rgba(0,0,0,0.8); border: 1px solid #333; padding: 8px; color: white; font-family: monospace;">[CCTV] ${labelText}</div>`;
-        }
-        if (d.type === 'earthquake') {
-          return `<div style="background: rgba(0,0,0,0.8); border: 1px solid #333; padding: 8px; color: white; font-family: monospace;">[USGS] M${d.mag} ${d.place}</div>`;
-        }
-        return `<div style="background: rgba(0,0,0,0.8); border: 1px solid #333; padding: 8px; color: white; font-family: monospace;">${labelText}</div>`;
-      })
-      .onPointClick((point: any) => {
-        const lat = point.lat;
-        const lng = point.lon !== undefined ? point.lon : point.lng;
-        this.globe.pointOfView({ lat, lng, altitude: 0.5 }, 1000);
-
-        if (point.type === 'cctv' || point.videoId) {
-          this.onSelectCctv?.(point);
-        } else if (point.type === 'earthquake') {
-          this.onSelectEarthquake?.(point);
-        }
-      });
-
-    this.initAirArcs();
-    this.initCables();
-
-    const controls = this.globe.controls();
-    controls.autoRotate = true;
-    controls.autoRotateSpeed = 0.35;
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-
-    this.globe.pointOfView({ lat: 24, lng: 121, altitude: 2.2 }, 1000);
 
     window.addEventListener('resize', this.onResize);
-    setTimeout(this.onResize, 50);
-    setTimeout(this.onResize, 250);
-    setTimeout(this.onResize, 600);
-    this.updateVisibleData();
   }
 
-  private initAirArcs(): void {
-    const airArcs = [
-      { id: 'tpe-lax', code: 'TPE-LAX', name: '台北 - 洛杉磯 跨太平洋航空走廊', startLat: 25.0797, startLng: 121.2342, endLat: 33.9416, endLng: -118.4085, initialGap: 0 },
-      { id: 'tpe-nrt', code: 'TPE-NRT', name: '台北 - 東京成田 國際航線', startLat: 25.0797, startLng: 121.2342, endLat: 35.7720, endLng: 140.3929, initialGap: 0.3 },
-      { id: 'tpe-sin', code: 'TPE-SIN', name: '台北 - 新加坡 樟宜國際航線', startLat: 25.0797, startLng: 121.2342, endLat: 1.3644, endLng: 103.9915, initialGap: 0.6 },
-      { id: 'lhr-jfk', code: 'LHR-JFK', name: '北大西洋航路 NAT-Track', startLat: 51.4700, startLng: -0.4543, endLat: 40.6413, endLng: -73.7781, initialGap: 0.1 },
-      { id: 'nrt-sfo', code: 'NRT-SFO', name: '跨太平洋極地走廊', startLat: 35.7720, startLng: 140.3929, endLat: 37.6213, endLng: -122.3790, initialGap: 0.4 },
-      { id: 'fra-sin', code: 'FRA-SIN', name: '歐亞大陸樞紐航線', startLat: 50.0379, startLng: 8.5622, endLat: 1.3644, endLng: 103.9915, initialGap: 0.7 },
-      { id: 'dxb-syd', code: 'DXB-SYD', name: '中東 - 澳洲遠程空運走廊', startLat: 25.2532, startLng: 55.3657, endLat: -33.9399, endLng: 151.1753, initialGap: 0.2 },
-      { id: 'cdg-hnd', code: 'CDG-HND', name: '巴黎 - 東京羽田', startLat: 49.0097, startLng: 2.5479, endLat: 35.5494, endLng: 139.7798, initialGap: 0.5 },
-      { id: 'jfk-lax', code: 'JFK-LAX', name: '美洲大陸橫貫幹線', startLat: 40.6413, startLng: -73.7781, endLat: 33.9416, endLng: -118.4085, initialGap: 0.8 },
-    ];
+  private initSatelliteLayer(): void {
+    if (!this.map.getSource('satellite-tiles')) {
+      this.map.addSource('satellite-tiles', {
+        type: 'raster',
+        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+        tileSize: 256,
+        maxzoom: 18,
+      });
 
-    this.globe
-      .arcsData(this.layerStates.sdk_air ? airArcs : [])
-      .arcStartLat((d: any) => d.startLat)
-      .arcStartLng((d: any) => d.startLng)
-      .arcEndLat((d: any) => d.endLat)
-      .arcEndLng((d: any) => d.endLng)
-      .arcColor(() => ['#ffffff', '#f8fafc', '#e2e8f0'])
-      .arcAltitude(0.24)
-      .arcStroke(0.65)
-      .arcDashLength(0.4)
-      .arcDashGap(0.2)
-      .arcDashInitialGap((d: any) => d.initialGap || 0)
-      .arcDashAnimateTime(3000)
-      .arcLabel((d: any) => `<div style="background: rgba(0,0,0,0.8); border: 1px solid #333; padding: 8px; color: white; font-family: monospace;">[航空走廊] ${d.name} (${d.code})</div>`);
+      this.map.addLayer({
+        id: 'satellite-layer',
+        type: 'raster',
+        source: 'satellite-tiles',
+        layout: { visibility: 'none' },
+        paint: { 'raster-opacity': 0.85 },
+      });
+    }
   }
 
-  private initCables(): void {
-    const validCables = UNDERSEA_CABLES.filter((c) => c.points && c.points.length > 1);
+  private initCctvLayer(): void {
+    const features = ALL_CCTV_CAMERAS.map((cam) => ({
+      type: 'Feature' as const,
+      geometry: {
+        type: 'Point' as const,
+        coordinates: [cam.lng, cam.lat],
+      },
+      properties: {
+        id: cam.id,
+        name: cam.name,
+        city: cam.city,
+        country: cam.country,
+        feed_url: cam.feed_url || '',
+        stream_url: cam.stream_url || '',
+        stream_type: cam.stream_type || 'jpg',
+        videoId: cam.videoId || '',
+        source: cam.source,
+      },
+    }));
 
-    this.globe
-      .pathsData(this.layerStates.cables ? validCables : [])
-      .pathPoints((d: any) => d.points.map(([lng, lat]: [number, number]) => ({ lat, lng })))
-      .pathPointLat('lat')
-      .pathPointLng('lng')
-      .pathColor(() => '#5eead4')
-      .pathStroke(0.7)
-      .pathDashLength(0.25)
-      .pathDashGap(0.04)
-      .pathDashAnimateTime(6000)
-      .pathLabel((d: any) => `<div style="background: rgba(0,0,0,0.85); border: 1px solid #333; padding: 8px 12px; color: white; font-family: monospace; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.6);"><span style="color:#5eead4;font-weight:bold;">[海底光纜]</span> ${d.name}</div>`);
+    this.map.addSource('cctv', {
+      type: 'geojson',
+      data: {
+        type: 'FeatureCollection',
+        features,
+      },
+    });
+
+    // Outer subtle glow
+    this.map.addLayer({
+      id: 'cctv-glow',
+      type: 'circle',
+      source: 'cctv',
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 4, 6, 7, 10, 12, 14, 18],
+        'circle-color': '#10b981',
+        'circle-opacity': 0.25,
+        'circle-blur': 0.8,
+      },
+    });
+
+    // Main emerald dot
+    this.map.addLayer({
+      id: 'cctv-dots',
+      type: 'circle',
+      source: 'cctv',
+      paint: {
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 2.5, 6, 4.5, 10, 7, 14, 10],
+        'circle-color': '#10b981',
+        'circle-opacity': 0.95,
+        'circle-stroke-width': 2,
+        'circle-stroke-color': '#000000',
+        'circle-stroke-opacity': 0.9,
+      },
+    });
+
+    // Labels at zoom 11+
+    this.map.addLayer({
+      id: 'cctv-label',
+      type: 'symbol',
+      source: 'cctv',
+      minzoom: 11,
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-size': 9.5,
+        'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+        'text-offset': [0, 1.6],
+        'text-max-width': 12,
+        'text-allow-overlap': false,
+      },
+      paint: {
+        'text-color': '#10b981',
+        'text-halo-color': '#000000',
+        'text-halo-width': 1.5,
+        'text-opacity': 0.9,
+      },
+    });
+
+    // Interaction
+    this.map.on('click', 'cctv-dots', (e) => {
+      const feat = e.features?.[0];
+      if (feat && feat.properties) {
+        this.handleCctvClick(feat.properties as any);
+      }
+    });
+
+    this.map.on('mouseenter', 'cctv-dots', () => {
+      this.map.getCanvas().style.cursor = 'pointer';
+    });
+    this.map.on('mouseleave', 'cctv-dots', () => {
+      this.map.getCanvas().style.cursor = '';
+    });
   }
 
-  private async fetchEarthquakes(): Promise<void> {
+  private handleCctvClick(cam: any): void {
+    this.onSelectCctv?.({
+      id: cam.id,
+      name: cam.name,
+      city: cam.city,
+      country: cam.country,
+      lat: cam.lat,
+      lon: cam.lng,
+      videoId: cam.videoId || '',
+      feed_url: cam.feed_url,
+      stream_type: cam.stream_type,
+    });
+  }
+
+  private async initEarthquakeLayer(): Promise<void> {
     try {
       const res = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson');
       const data = await res.json();
-      const quakes: EarthquakeItem[] = (data.features || []).map((f: any) => ({
-        id: f.id,
-        mag: f.properties.mag ?? 3.0,
-        place: f.properties.place || 'Unknown',
-        time: f.properties.time,
-        lat: f.geometry.coordinates[1],
-        lon: f.geometry.coordinates[0],
-        depth: f.geometry.coordinates[2],
-      }));
-      this.earthquakes = quakes.slice(0, 60);
-      this.updateVisibleData();
-    } catch (err) {
-      this.earthquakes = [
-        { id: 'q1', mag: 7.2, place: 'Hualien Offshore', time: Date.now(), lat: 23.85, lon: 121.65, depth: 15 },
-        { id: 'q2', mag: 6.8, place: 'Noto Peninsula', time: Date.now(), lat: 37.5, lon: 137.2, depth: 10 },
-      ];
-      this.updateVisibleData();
+
+      this.map.addSource('earthquakes', {
+        type: 'geojson',
+        data,
+      });
+
+      // Earthquake glow
+      this.map.addLayer({
+        id: 'eq-glow',
+        type: 'circle',
+        source: 'earthquakes',
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['get', 'mag'], 2.5, 8, 5.0, 16, 7.0, 28],
+          'circle-color': [
+            'step', ['get', 'mag'],
+            '#eab308', 4.5,
+            '#f97316', 6.0,
+            '#ef4444'
+          ],
+          'circle-opacity': 0.3,
+          'circle-blur': 0.8,
+        },
+      });
+
+      // Main earthquake circle
+      this.map.addLayer({
+        id: 'eq-circles',
+        type: 'circle',
+        source: 'earthquakes',
+        paint: {
+          'circle-radius': ['interpolate', ['linear'], ['get', 'mag'], 2.5, 4, 5.0, 8, 7.0, 15],
+          'circle-color': [
+            'step', ['get', 'mag'],
+            '#eab308', 4.5,
+            '#f97316', 6.0,
+            '#ef4444'
+          ],
+          'circle-opacity': 0.9,
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#000000',
+        },
+      });
+
+      // Magnitude label
+      this.map.addLayer({
+        id: 'eq-label',
+        type: 'symbol',
+        source: 'earthquakes',
+        minzoom: 3,
+        filter: ['>=', ['get', 'mag'], 4.0],
+        layout: {
+          'text-field': ['concat', 'M', ['to-string', ['get', 'mag']]],
+          'text-size': 9,
+          'text-offset': [0, 1.4],
+        },
+        paint: {
+          'text-color': '#f59e0b',
+          'text-halo-color': '#000000',
+          'text-halo-width': 1,
+        },
+      });
+
+      this.map.on('click', 'eq-circles', (e) => {
+        const feat = e.features?.[0];
+        if (feat && feat.properties) {
+          const p = feat.properties;
+          const coords = (feat.geometry as any).coordinates;
+          this.onSelectEarthquake?.({
+            id: feat.id ? String(feat.id) : String(p.code),
+            mag: p.mag,
+            place: p.place,
+            time: p.time,
+            lat: coords[1],
+            lon: coords[0],
+            depth: coords[2] || 10,
+          });
+        }
+      });
+    } catch (e) {
+      console.warn('[GlobeScene] USGS Earthquake fetch failed:', e);
     }
   }
 
-  private updateVisibleData(): void {
-    if (!this.globe) return;
-    const points: any[] = [];
+  private initCablesLayer(): void {
+    const validCables = UNDERSEA_CABLES.filter((c) => c.points && c.points.length > 1);
+    const features = validCables.map((c) => ({
+      type: 'Feature' as const,
+      geometry: {
+        type: 'LineString' as const,
+        coordinates: c.points,
+      },
+      properties: {
+        id: c.id,
+        name: c.name,
+      },
+    }));
 
-    if (this.layerStates.cctv) {
-      CCTV_PRESETS.forEach((p) => points.push({ ...p, type: 'cctv' }));
-    }
+    this.map.addSource('cables', {
+      type: 'geojson',
+      data: {
+        type: 'FeatureCollection',
+        features,
+      },
+    });
 
-    if (this.layerStates.earthquakes) {
-      this.earthquakes.forEach((q) => points.push({ ...q, type: 'earthquake' }));
-      this.globe
-        .ringsData(this.earthquakes)
-        .ringLat('lat')
-        .ringLng('lon')
-        .ringColor((d: any) => (d.mag >= 6.0 ? '#ef4444' : '#facc15'))
-        .ringMaxRadius(10)
-        .ringPropagationSpeed(2)
-        .ringRepeatPeriod(1000);
-    } else {
-      this.globe.ringsData([]);
-    }
-
-    this.globe.pointsData(points);
-    this.initAirArcs();
-    this.initCables();
+    this.map.addLayer({
+      id: 'cables-layer',
+      type: 'line',
+      source: 'cables',
+      layout: {
+        'line-join': 'round',
+        'line-cap': 'round',
+      },
+      paint: {
+        'line-color': '#5eead4',
+        'line-width': ['interpolate', ['linear'], ['zoom'], 1, 1, 6, 1.8, 12, 2.5],
+        'line-opacity': 0.75,
+      },
+    });
   }
 
-  public toggleLayer(key: string, visible?: boolean): boolean {
-    if (key in this.layerStates) {
-      const next = visible !== undefined ? visible : !(this.layerStates as any)[key];
-      (this.layerStates as any)[key] = next;
-      this.updateVisibleData();
-      return next;
-    }
-    return false;
+  private initAirCorridorsLayer(): void {
+    const airArcs = [
+      { id: 'tpe-lax', name: '台北 - 洛杉磯 跨太平洋航空走廊', coords: [[121.23, 25.07], [140.0, 35.0], [-160.0, 45.0], [-135.0, 40.0], [-118.40, 33.94]] },
+      { id: 'tpe-nrt', name: '台北 - 東京成田 航線', coords: [[121.23, 25.07], [128.0, 30.0], [140.39, 35.77]] },
+      { id: 'tpe-sin', name: '台北 - 新加坡 樟宜航線', coords: [[121.23, 25.07], [115.0, 15.0], [103.99, 1.36]] },
+      { id: 'lhr-jfk', name: '北大西洋航路 NAT-Track', coords: [[-0.45, 51.47], [-30.0, 56.0], [-55.0, 48.0], [-73.77, 40.64]] },
+    ];
+
+    const features = airArcs.map((a) => ({
+      type: 'Feature' as const,
+      geometry: {
+        type: 'LineString' as const,
+        coordinates: a.coords,
+      },
+      properties: { id: a.id, name: a.name },
+    }));
+
+    this.map.addSource('air-corridors', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features },
+    });
+
+    this.map.addLayer({
+      id: 'air-layer',
+      type: 'line',
+      source: 'air-corridors',
+      paint: {
+        'line-color': '#38bdf8',
+        'line-width': 1.6,
+        'line-dasharray': [3, 2],
+        'line-opacity': 0.8,
+      },
+    });
+  }
+
+  private initMaritimeLayer(): void {
+    const maritimeLines = [
+      { id: 'tw-strait', name: '台灣海峽戰略航道', coords: [[119.5, 23.0], [120.2, 24.5], [121.5, 26.0]] },
+      { id: 'malacca', name: '馬六甲海峽能源航道', coords: [[95.0, 5.5], [101.0, 2.5], [104.0, 1.2]] },
+      { id: 'suez', name: '蘇伊士運河航路', coords: [[32.3, 31.2], [32.5, 29.9]] },
+    ];
+
+    const features = maritimeLines.map((m) => ({
+      type: 'Feature' as const,
+      geometry: {
+        type: 'LineString' as const,
+        coordinates: m.coords,
+      },
+      properties: { id: m.id, name: m.name },
+    }));
+
+    this.map.addSource('maritime', {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features },
+    });
+
+    this.map.addLayer({
+      id: 'maritime-layer',
+      type: 'line',
+      source: 'maritime',
+      paint: {
+        'line-color': '#f59e0b',
+        'line-width': 1.5,
+        'line-dasharray': [4, 2],
+        'line-opacity': 0.75,
+      },
+    });
+  }
+
+  private initTacticalControls(): void {
+    const controls = document.createElement('div');
+    controls.className = 'map-controls-tactical';
+    controls.innerHTML = `
+      <button class="ctrl-btn active" id="btn-3d" title="3D Isometric Tactical View">🌐 3D</button>
+      <button class="ctrl-btn" id="btn-2d" title="2D Orthographic Top-Down View">👤 2D</button>
+      <button class="ctrl-btn active" id="btn-map" title="Tactical Dark Vector Map">🌙 MAP</button>
+      <button class="ctrl-btn" id="btn-sat" title="High-Res Satellite Imagery">🛰️ SAT</button>
+    `;
+    this.container.appendChild(controls);
+
+    const btn3d = controls.querySelector('#btn-3d') as HTMLButtonElement;
+    const btn2d = controls.querySelector('#btn-2d') as HTMLButtonElement;
+    const btnMap = controls.querySelector('#btn-map') as HTMLButtonElement;
+    const btnSat = controls.querySelector('#btn-sat') as HTMLButtonElement;
+
+    btn3d?.addEventListener('click', () => {
+      this.currentPitch = 50;
+      this.map.easeTo({ pitch: 50, duration: 600 });
+      btn3d.classList.add('active');
+      btn2d.classList.remove('active');
+    });
+
+    btn2d?.addEventListener('click', () => {
+      this.currentPitch = 0;
+      this.map.easeTo({ pitch: 0, duration: 600 });
+      btn2d.classList.add('active');
+      btn3d.classList.remove('active');
+    });
+
+    btnMap?.addEventListener('click', () => {
+      this.currentStyle = 'dark';
+      if (this.map.getLayer('satellite-layer')) {
+        this.map.setLayoutProperty('satellite-layer', 'visibility', 'none');
+      }
+      btnMap.classList.add('active');
+      btnSat.classList.remove('active');
+    });
+
+    btnSat?.addEventListener('click', () => {
+      this.currentStyle = 'sat';
+      if (this.map.getLayer('satellite-layer')) {
+        this.map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
+      }
+      btnSat.classList.add('active');
+      btnMap.classList.remove('active');
+    });
+  }
+
+  private initTelemetryHUD(): void {
+    const hud = document.createElement('div');
+    hud.className = 'map-telemetry-hud';
+    hud.id = 'map-telemetry-hud';
+    hud.innerHTML = `
+      <span>CURSOR: <b id="hud-coords">25.0400, 121.5000</b></span>
+      <span style="color:var(--border-active);">|</span>
+      <span>LOCATION: <b id="hud-location">Taipei, Taiwan</b></span>
+      <span style="color:var(--border-active);">|</span>
+      <span>ZOOM: <b id="hud-zoom">12.5</b></span>
+    `;
+    this.container.appendChild(hud);
+
+    const coordsEl = hud.querySelector('#hud-coords');
+    const zoomEl = hud.querySelector('#hud-zoom');
+
+    this.map.on('mousemove', (e) => {
+      if (coordsEl) {
+        coordsEl.textContent = `${e.lngLat.lat.toFixed(4)}, ${e.lngLat.lng.toFixed(4)}`;
+      }
+    });
+
+    this.map.on('zoom', () => {
+      if (zoomEl) {
+        zoomEl.textContent = this.map.getZoom().toFixed(1);
+      }
+    });
   }
 
   public setAutoRotate(enabled: boolean): void {
-    if (this.globe && this.globe.controls()) {
-      this.globe.controls().autoRotate = enabled;
+    this.autoRotate = enabled;
+    if (this.rotateAnimationId) {
+      cancelAnimationFrame(this.rotateAnimationId);
+      this.rotateAnimationId = undefined;
     }
+
+    if (!enabled) return;
+
+    let lastTime = performance.now();
+    const frame = (time: number) => {
+      if (!this.autoRotate || this.isDestroyed) return;
+      const dt = time - lastTime;
+      lastTime = time;
+
+      const center = this.map.getCenter();
+      center.lng += (0.4 * dt) / 1000;
+      this.map.setCenter(center);
+
+      this.rotateAnimationId = requestAnimationFrame(frame);
+    };
+
+    this.rotateAnimationId = requestAnimationFrame(frame);
   }
 
-  public focusCoordinates(lat: number, lon: number, distance = 0.5): void {
-    if (this.globe) {
-      this.globe.pointOfView({ lat, lng: lon, altitude: distance }, 1000);
+  public focusCoordinates(lat: number, lng: number, _altitude?: number): void {
+    this.map.flyTo({
+      center: [lng, lat],
+      zoom: 12.5,
+      pitch: this.currentPitch,
+      duration: 1200,
+    });
+  }
+
+  public toggleLayer(layerKey: keyof GlobeLayerState, visible: boolean): void {
+    this.layerStates[layerKey] = visible;
+    const vis = visible ? 'visible' : 'none';
+
+    try {
+      if (layerKey === 'cctv') {
+        if (this.map.getLayer('cctv-dots')) this.map.setLayoutProperty('cctv-dots', 'visibility', vis);
+        if (this.map.getLayer('cctv-glow')) this.map.setLayoutProperty('cctv-glow', 'visibility', vis);
+        if (this.map.getLayer('cctv-label')) this.map.setLayoutProperty('cctv-label', 'visibility', vis);
+        this.previewManager?.setActive(visible);
+      } else if (layerKey === 'earthquakes') {
+        if (this.map.getLayer('eq-circles')) this.map.setLayoutProperty('eq-circles', 'visibility', vis);
+        if (this.map.getLayer('eq-glow')) this.map.setLayoutProperty('eq-glow', 'visibility', vis);
+        if (this.map.getLayer('eq-label')) this.map.setLayoutProperty('eq-label', 'visibility', vis);
+      } else if (layerKey === 'cables') {
+        if (this.map.getLayer('cables-layer')) this.map.setLayoutProperty('cables-layer', 'visibility', vis);
+      } else if (layerKey === 'sdk_air') {
+        if (this.map.getLayer('air-layer')) this.map.setLayoutProperty('air-layer', 'visibility', vis);
+      } else if (layerKey === 'maritime') {
+        if (this.map.getLayer('maritime-layer')) this.map.setLayoutProperty('maritime-layer', 'visibility', vis);
+      }
+    } catch (e) {
+      console.warn(`[GlobeScene] Toggle layer ${layerKey} error:`, e);
     }
   }
 
   private onResize = (): void => {
-    if (this.globe && this.container) {
-      const w = this.container.clientWidth || window.innerWidth;
-      const h = this.container.clientHeight || Math.floor(window.innerHeight * 0.55);
-      this.globe.width(w).height(h);
+    if (this.map) {
+      this.map.resize();
     }
   };
 
   public destroy(): void {
+    this.isDestroyed = true;
+    this.setAutoRotate(false);
+    this.previewManager?.destroy();
+    window.removeEventListener('resize', this.onResize);
+    this.map.remove();
   }
 }

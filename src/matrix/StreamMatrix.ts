@@ -6,7 +6,8 @@ export type MatrixGridLayout = typeof GRID_LAYOUTS[number] | 'auto';
 export interface MatrixChannel {
   id: string;
   name: string;
-  videoId: string;
+  videoId?: string;
+  feed_url?: string;
   city?: string;
   country?: string;
 }
@@ -355,16 +356,33 @@ export class StreamMatrix {
                       : ''
                   }
 
-                  <!-- Video IFrame -->
+                  <!-- Video / Image Stream Wrapper -->
                   <div class="tile-frame-wrapper">
-                    <iframe
-                      id="iframe-${ch.id}"
-                      src="https://www.youtube-nocookie.com/embed/${ch.videoId}?autoplay=1&mute=1&enablejsapi=1"
-                      title="${ch.name}"
-                      frameborder="0"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                      allowfullscreen
-                    ></iframe>
+                    ${
+                      ch.videoId
+                        ? `<iframe
+                            id="iframe-${ch.id}"
+                            src="https://www.youtube-nocookie.com/embed/${ch.videoId}?autoplay=1&mute=1&enablejsapi=1"
+                            title="${ch.name}"
+                            frameborder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            allowfullscreen
+                          ></iframe>`
+                        : ch.feed_url
+                        ? `<img
+                            src="${ch.feed_url}"
+                            alt="${ch.name}"
+                            referrerpolicy="no-referrer"
+                            style="width: 100%; height: 100%; object-fit: cover;"
+                            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                          />
+                          <div class="cctv-tile-fallback" style="display: none; width: 100%; height: 100%; background: #000; align-items: center; justify-content: center; color: var(--accent-emerald); font-family: var(--font-mono); font-size: 11px;">
+                            <span>● LIVE STREAM ACTIVE</span>
+                          </div>`
+                        : `<div class="cctv-tile-fallback" style="width: 100%; height: 100%; background: #000; display: flex; align-items: center; justify-content: center; color: var(--accent-emerald); font-family: var(--font-mono); font-size: 11px;">
+                            <span>● MONITOR ACTIVE</span>
+                          </div>`
+                    }
                   </div>
                 </div>
               `;

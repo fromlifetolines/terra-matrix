@@ -160,20 +160,27 @@ class TerraMatrixApp {
     });
 
     // Handle CCTV Click: Auto-add to matrix and show tactical notification
-    this.globeScene.onSelectCctv = (pt: CCTVPoint) => {
+    this.globeScene.onSelectCctv = (pt: any) => {
       this.streamMatrix.addChannel({
         id: pt.id,
         name: pt.name,
-        videoId: pt.videoId,
+        videoId: pt.videoId || '',
+        feed_url: pt.feed_url || '',
         city: pt.city,
         country: pt.country,
       });
 
+      const coordsStr = (pt.lat !== undefined && pt.lon !== undefined)
+        ? `${pt.lat.toFixed(4)}°N, ${pt.lon.toFixed(4)}°E`
+        : (pt.lat !== undefined && pt.lng !== undefined)
+        ? `${pt.lat.toFixed(4)}°N, ${pt.lng.toFixed(4)}°E`
+        : 'Live Coordinates';
+
       this.showInfoCard({
         badge: 'CCTV FEED ADDED',
         badgeClass: 'MONITOR',
-        title: `${pt.name} (${pt.city}, ${pt.country})`,
-        content: `Coordinates: ${pt.lat.toFixed(4)}°N, ${pt.lon.toFixed(4)}°E<br/>Target Stream: ${pt.videoId}<br/><span style="color:var(--accent-emerald);">已自動加入下方播放矩陣</span>`,
+        title: `${pt.name} (${pt.city || 'Taipei'}, ${pt.country || 'Taiwan'})`,
+        content: `Coordinates: ${coordsStr}<br/>Source: ${pt.source || 'LIVE FEED'}<br/><span style="color:var(--accent-emerald);">● 已同步串流加入下方播放矩陣</span>`,
       });
     };
 
@@ -281,21 +288,22 @@ class TerraMatrixApp {
   }
 
   private initHeaderActions(): void {
-    let autoRotate = true;
+    let autoRotate = false;
     const rotateBtn = document.getElementById('btn-auto-rotate');
     if (rotateBtn) {
+      rotateBtn.style.color = 'var(--text-dim)';
       rotateBtn.addEventListener('click', () => {
         autoRotate = !autoRotate;
         this.globeScene.setAutoRotate(autoRotate);
-        rotateBtn.style.color = autoRotate ? '#fff' : 'var(--text-dim)';
+        rotateBtn.style.color = autoRotate ? 'var(--accent-emerald)' : 'var(--text-dim)';
       });
     }
 
     const resetBtn = document.getElementById('btn-reset-view');
     if (resetBtn) {
       resetBtn.addEventListener('click', () => {
-        // Reset to initial Taiwan / East Asia perspective
-        this.globeScene.focusCoordinates(24, 121, 260);
+        // Reset to initial Taiwan / Taipei tactical perspective
+        this.globeScene.focusCoordinates(25.04, 121.50);
       });
     }
   }
