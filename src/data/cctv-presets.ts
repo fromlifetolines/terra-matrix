@@ -21,13 +21,13 @@ export const CCTV_PRESETS: CCTVPoint[] = [
     category: 'news'
   },
   {
-    id: 'ttv-news',
-    name: '台視新聞台 TTV News Live',
+    id: 'cts-news',
+    name: '華視新聞 CH52 CTS News Live',
     city: 'Taipei',
     country: 'Taiwan',
-    lat: 25.048,
-    lon: 121.552,
-    videoId: 'xL0ch83RAK8',
+    lat: 25.042,
+    lon: 121.556,
+    videoId: 'TL8MMGiF0hA',
     category: 'news'
   },
   {

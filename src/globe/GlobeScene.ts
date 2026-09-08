@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { createEarthMaterial, createAtmosphereMaterial } from './EarthShader';
+import { createEarthMaterial, createAtmosphereMaterial, createCloudsMaterial } from './EarthShader';
 import { getSunDirectionVector } from '../utils/solar';
 import { latLonToVector3 } from '../utils/coordinates';
 import { CablesLayer } from './layers/CablesLayer';
@@ -33,6 +33,8 @@ export class GlobeScene {
 
   private earthMesh!: THREE.Mesh;
   private earthMaterial!: THREE.ShaderMaterial;
+  private cloudsMesh!: THREE.Mesh;
+  private cloudsMaterial!: THREE.ShaderMaterial;
   private atmosphereMesh!: THREE.Mesh;
   private atmosphereMaterial!: THREE.ShaderMaterial;
 
@@ -199,6 +201,7 @@ export class GlobeScene {
     const nightTexture = loadSafe('earth_lights.png', '#020617');
     const normalTexture = loadSafe('earth_normal.jpg', '#8080ff');
     const specularTexture = loadSafe('earth_specular.jpg', '#000000');
+    const cloudTexture = loadSafe('earth_clouds.png', '#ffffff');
 
     // Earth Sphere Geometry
     const earthGeometry = new THREE.SphereGeometry(this.earthRadius, 96, 96);
@@ -220,6 +223,16 @@ export class GlobeScene {
 
     this.earthMesh = new THREE.Mesh(earthGeometry, this.earthMaterial);
     this.scene.add(this.earthMesh);
+
+    // Independent Cloud Sphere Layer (Tropospheric convective clouds)
+    try {
+      const cloudsGeometry = new THREE.SphereGeometry(this.earthRadius * 1.005, 96, 96);
+      this.cloudsMaterial = createCloudsMaterial(cloudTexture);
+      this.cloudsMesh = new THREE.Mesh(cloudsGeometry, this.cloudsMaterial);
+      this.scene.add(this.cloudsMesh);
+    } catch (err) {
+      console.warn('[GlobeScene] Cloud sphere layer failed to initialize:', err);
+    }
 
     // Outer Atmosphere Halo Mesh
     try {
@@ -398,6 +411,15 @@ export class GlobeScene {
         if (this.atmosphereMaterial && this.atmosphereMaterial.uniforms) {
           this.atmosphereMaterial.uniforms.uSunDirection.value.copy(sunVector);
         }
+
+        if (this.cloudsMaterial && this.cloudsMaterial.uniforms) {
+          this.cloudsMaterial.uniforms.uSunDirection.value.copy(sunVector);
+        }
+      }
+
+      // Clouds rotation (slightly faster than earth auto-rotation)
+      if (this.cloudsMesh) {
+        this.cloudsMesh.rotation.y += delta * 0.015;
       }
 
       // Layer animations
