@@ -48,64 +48,79 @@ export class GlobeScene {
   private initGlobe(): void {
     const createGlobe = Globe as unknown as (config?: any) => (el: HTMLElement) => GlobeInstance;
     
-    const BLUE_MARBLE_URL = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
-    const NIGHT_LIGHTS_URL = 'https://unpkg.com/three-globe/example/img/earth-night.jpg';
-    const WATER_SPECULAR_URL = 'https://unpkg.com/three-globe/example/img/earth-water.png';
-    const TOPOLOGY_URL = 'https://unpkg.com/three-globe/example/img/earth-topology.png';
-    const CLOUDS_URL = 'https://unpkg.com/three-globe/example/img/earth-clouds.png';
+    // Step 1 & 2: Local bundled NASA textures via dynamic Base URL
+    const baseUrl = import.meta.env.BASE_URL || '/';
+    const globeImageUrl = `${baseUrl}earth-blue-marble.jpg`;
+    const bumpImageUrl = `${baseUrl}earth-topology.png`;
+    const nightLightsUrl = `${baseUrl}earth-night.jpg`;
+    const waterSpecularUrl = `${baseUrl}earth-water.png`;
+    const cloudsUrl = `${baseUrl}earth-clouds.png`;
 
-    const texLoader = new THREE.TextureLoader();
-
-    const configureTex = (tex: THREE.Texture) => {
-      tex.anisotropy = 16;
-      tex.minFilter = THREE.LinearMipmapLinearFilter;
-      tex.magFilter = THREE.LinearFilter;
-      tex.generateMipmaps = true;
-      tex.needsUpdate = true;
+    // Safe procedural fallback texture generator
+    const createFallbackTexture = (color = '#0b1d3a'): THREE.CanvasTexture => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, 1024, 512);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= 1024; x += 64) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, 512);
+          ctx.stroke();
+        }
+        for (let y = 0; y <= 512; y += 64) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(1024, y);
+          ctx.stroke();
+        }
+      }
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.ClampToEdgeWrapping;
       return tex;
     };
 
-    const dayTex = texLoader.load(BLUE_MARBLE_URL, configureTex);
-    const nightTex = texLoader.load(NIGHT_LIGHTS_URL, configureTex);
-    const specularTex = texLoader.load(WATER_SPECULAR_URL, configureTex);
-    const bumpTex = texLoader.load(TOPOLOGY_URL, configureTex);
+    // CORS & Safe Texture Loader
+    const texLoader = new THREE.TextureLoader();
+    texLoader.setCrossOrigin('anonymous');
 
-    // Custom Globe Material blending day Blue Marble, night lights, water specular and bump
-    const customGlobeMaterial = new THREE.MeshPhongMaterial({
-      map: dayTex,
-      bumpMap: bumpTex,
-      bumpScale: 0.04,
-      specularMap: specularTex,
-      specular: new THREE.Color(0x334455),
-      shininess: 20,
-    });
-
-    customGlobeMaterial.onBeforeCompile = (shader) => {
-      shader.uniforms.nightTexture = { value: nightTex };
-      shader.vertexShader = `
-        varying vec3 vWorldNormal;
-        ${shader.vertexShader}
-      `.replace(
-        '#include <worldpos_vertex>',
-        `#include <worldpos_vertex>
-         vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);`
-      );
-      shader.fragmentShader = `
-        uniform sampler2D nightTexture;
-        varying vec3 vWorldNormal;
-        ${shader.fragmentShader}
-      `.replace(
-        '#include <dithering_fragment>',
-        `#include <dithering_fragment>
-         float sunDot = dot(vWorldNormal, normalize(vec3(0.8, 0.4, 0.6)));
-         if (sunDot < 0.15) {
-           vec4 nightCol = texture2D(nightTexture, vUv);
-           float factor = smoothstep(0.15, -0.2, sunDot);
-           gl_FragColor.rgb += nightCol.rgb * factor * 1.6;
-         }
-        `
+    const loadSafeTexture = (
+      url: string,
+      fallbackColor = '#0b1d3a',
+      onLoaded?: (t: THREE.Texture) => void
+    ): THREE.Texture => {
+      return texLoader.load(
+        url,
+        (tex) => {
+          tex.anisotropy = 16;
+          tex.minFilter = THREE.LinearMipmapLinearFilter;
+          tex.magFilter = THREE.LinearFilter;
+          tex.generateMipmaps = true;
+          tex.needsUpdate = true;
+          onLoaded?.(tex);
+        },
+        undefined,
+        (err) => {
+          console.warn(`[GlobeScene] Texture load failed for ${url}, fallback to canvas:`, err);
+          const fallback = createFallbackTexture(fallbackColor);
+          fallback.anisotropy = 16;
+          fallback.minFilter = THREE.LinearMipmapLinearFilter;
+          fallback.magFilter = THREE.LinearFilter;
+          fallback.generateMipmaps = true;
+          fallback.needsUpdate = true;
+          onLoaded?.(fallback);
+        }
       );
     };
+
+    const initialWidth = this.container.clientWidth || window.innerWidth;
+    const initialHeight = this.container.clientHeight || Math.floor(window.innerHeight * 0.55);
 
     this.globe = createGlobe({
       rendererConfig: {
@@ -114,23 +129,60 @@ export class GlobeScene {
         powerPreference: 'high-performance',
       },
     })(this.container)
-      .globeImageUrl(BLUE_MARBLE_URL)
-      .bumpImageUrl(TOPOLOGY_URL)
-      .globeMaterial(customGlobeMaterial)
+      .globeImageUrl(globeImageUrl)
+      .bumpImageUrl(bumpImageUrl)
       .backgroundColor('#050507')
       .atmosphereColor('#3a82f7')
-      .atmosphereAltitude(0.18)
-      .width(this.container.clientWidth)
-      .height(this.container.clientHeight || 500);
+      .atmosphereAltitude(0.2)
+      .width(initialWidth)
+      .height(initialHeight);
 
-    texLoader.load(CLOUDS_URL, (cloudsTexture) => {
-      configureTex(cloudsTexture);
+    // Camera initial position check: camera.position.set(0, 0, 300)
+    const camera = this.globe.camera() as THREE.PerspectiveCamera;
+    if (camera) {
+      camera.position.set(0, 0, 300);
+      camera.lookAt(0, 0, 0);
+      camera.updateProjectionMatrix();
+    }
+
+    // Enhance globe material once ready
+    this.globe.onGlobeReady(() => {
+      const mat = this.globe.globeMaterial() as THREE.MeshPhongMaterial;
+      if (mat) {
+        if (mat.map) {
+          mat.map.anisotropy = 16;
+          mat.map.minFilter = THREE.LinearMipmapLinearFilter;
+          mat.map.magFilter = THREE.LinearFilter;
+          mat.map.generateMipmaps = true;
+          mat.map.needsUpdate = true;
+        }
+
+        // Apply specular reflection on ocean
+        loadSafeTexture(waterSpecularUrl, '#000000', (specTex) => {
+          mat.specularMap = specTex;
+          mat.specular = new THREE.Color(0x334455);
+          mat.shininess = 22;
+          mat.needsUpdate = true;
+        });
+
+        // Apply night city lights
+        loadSafeTexture(nightLightsUrl, '#000000', (nightTex) => {
+          mat.emissiveMap = nightTex;
+          mat.emissive = new THREE.Color(0x888888);
+          mat.emissiveIntensity = 0.4;
+          mat.needsUpdate = true;
+        });
+      }
+    });
+
+    // Cloud layer with safe loader
+    loadSafeTexture(cloudsUrl, '#ffffff', (cloudsTexture) => {
       const globeRadius = this.globe.getGlobeRadius ? this.globe.getGlobeRadius() : 100;
       const cloudsGeo = new THREE.SphereGeometry(globeRadius * 1.006, 75, 75);
       const cloudsMat = new THREE.MeshPhongMaterial({
         map: cloudsTexture,
         transparent: true,
-        opacity: 0.6,
+        opacity: 0.55,
         depthWrite: false,
       });
 
@@ -187,6 +239,9 @@ export class GlobeScene {
     this.globe.pointOfView({ lat: 24, lng: 121, altitude: 2.2 }, 1000);
 
     window.addEventListener('resize', this.onResize);
+    setTimeout(this.onResize, 50);
+    setTimeout(this.onResize, 250);
+    setTimeout(this.onResize, 600);
     this.updateVisibleData();
   }
 
@@ -310,7 +365,9 @@ export class GlobeScene {
 
   private onResize = (): void => {
     if (this.globe && this.container) {
-      this.globe.width(this.container.clientWidth).height(this.container.clientHeight || 500);
+      const w = this.container.clientWidth || window.innerWidth;
+      const h = this.container.clientHeight || Math.floor(window.innerHeight * 0.55);
+      this.globe.width(w).height(h);
     }
   };
 
