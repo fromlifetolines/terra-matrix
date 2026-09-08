@@ -187,11 +187,13 @@ export class GlobeScene {
         (tex) => {
           tex.wrapS = THREE.ClampToEdgeWrapping;
           tex.wrapT = THREE.ClampToEdgeWrapping;
+          tex.generateMipmaps = true;
           tex.minFilter = THREE.LinearMipmapLinearFilter;
           tex.magFilter = THREE.LinearFilter;
-          tex.generateMipmaps = true;
           if (this.renderer) {
-            tex.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+            tex.anisotropy = Math.min(16, this.renderer.capabilities.getMaxAnisotropy());
+          } else {
+            tex.anisotropy = 16;
           }
           tex.needsUpdate = true;
         },
@@ -282,10 +284,25 @@ export class GlobeScene {
     this.tooltipEl.style.display = 'none';
     document.body.appendChild(this.tooltipEl);
 
+    this.raycaster.params.Line = { threshold: 3.5 };
+
     const canvas = this.renderer.domElement;
     canvas.addEventListener('pointerdown', () => {
       this.controls.autoRotate = false;
     });
+
+    const getRaycastUserData = (intersects: THREE.Intersection[]): any | null => {
+      for (const hit of intersects) {
+        let current: THREE.Object3D | null = hit.object;
+        while (current && current !== this.scene) {
+          if (current.userData && current.userData.type) {
+            return current.userData;
+          }
+          current = current.parent;
+        }
+      }
+      return null;
+    };
 
     canvas.addEventListener('pointermove', (e) => {
       const rect = canvas.getBoundingClientRect();
@@ -294,17 +311,20 @@ export class GlobeScene {
 
       this.raycaster.setFromCamera(this.mouse, this.camera);
       
-      const targets = [
-        ...this.cctvLayer.group.children,
-        ...this.earthquakeLayer.group.children,
-        ...this.incidentsLayer.group.children,
-        ...this.newsLayer.group.children,
-      ];
+      const targets: THREE.Object3D[] = [];
+      if (this.layerStates.cctv) targets.push(...this.cctvLayer.group.children);
+      if (this.layerStates.earthquakes) targets.push(...this.earthquakeLayer.group.children);
+      if (this.layerStates.sdk_air) targets.push(...this.airLayer.group.children);
+      if (this.layerStates.cables) targets.push(...this.cablesLayer.group.children);
+      if (this.layerStates.maritime) targets.push(...this.maritimeLayer.group.children);
+      if (this.layerStates.global_incidents) targets.push(...this.incidentsLayer.group.children);
+      if (this.layerStates.live_news) targets.push(...this.newsLayer.group.children);
 
-      const intersects = this.raycaster.intersectObjects(targets, false);
-      if (intersects.length > 0 && intersects[0].object.userData?.type) {
+      const intersects = this.raycaster.intersectObjects(targets, true);
+      const userData = getRaycastUserData(intersects);
+      if (userData) {
         canvas.style.cursor = 'pointer';
-        this.updateTooltip(intersects[0].object.userData, e.clientX, e.clientY);
+        this.updateTooltip(userData, e.clientX, e.clientY);
       } else {
         canvas.style.cursor = 'grab';
         this.hideTooltip();
@@ -322,30 +342,32 @@ export class GlobeScene {
 
       this.raycaster.setFromCamera(this.mouse, this.camera);
       
-      const targets = [
-        ...this.cctvLayer.group.children,
-        ...this.earthquakeLayer.group.children,
-        ...this.incidentsLayer.group.children,
-        ...this.newsLayer.group.children,
-      ];
+      const targets: THREE.Object3D[] = [];
+      if (this.layerStates.cctv) targets.push(...this.cctvLayer.group.children);
+      if (this.layerStates.earthquakes) targets.push(...this.earthquakeLayer.group.children);
+      if (this.layerStates.sdk_air) targets.push(...this.airLayer.group.children);
+      if (this.layerStates.cables) targets.push(...this.cablesLayer.group.children);
+      if (this.layerStates.maritime) targets.push(...this.maritimeLayer.group.children);
+      if (this.layerStates.global_incidents) targets.push(...this.incidentsLayer.group.children);
+      if (this.layerStates.live_news) targets.push(...this.newsLayer.group.children);
 
-      const intersects = this.raycaster.intersectObjects(targets, false);
-      if (intersects.length > 0) {
-        const obj = intersects[0].object;
-        if (obj.userData?.type === 'cctv') {
-          const pt = obj.userData.point as CCTVPoint;
+      const intersects = this.raycaster.intersectObjects(targets, true);
+      const userData = getRaycastUserData(intersects);
+      if (userData) {
+        if (userData.type === 'cctv' && userData.point) {
+          const pt = userData.point as CCTVPoint;
           this.focusCoordinates(pt.lat, pt.lon);
           this.onSelectCctv?.(pt);
-        } else if (obj.userData?.type === 'earthquake') {
-          const q = obj.userData.quake as EarthquakeItem;
+        } else if (userData.type === 'earthquake' && userData.quake) {
+          const q = userData.quake as EarthquakeItem;
           this.focusCoordinates(q.lat, q.lon);
           this.onSelectEarthquake?.(q);
-        } else if (obj.userData?.type === 'incident') {
-          const inc = obj.userData.incident as GeoIncident;
+        } else if (userData.type === 'incident' && userData.incident) {
+          const inc = userData.incident as GeoIncident;
           this.focusCoordinates(inc.lat, inc.lon);
           this.onSelectIncident?.(inc);
-        } else if (obj.userData?.type === 'news') {
-          const nw = obj.userData.item as GeoNewsItem;
+        } else if (userData.type === 'news' && userData.item) {
+          const nw = userData.item as GeoNewsItem;
           this.focusCoordinates(nw.lat, nw.lon);
           this.onSelectNews?.(nw);
         }
@@ -370,26 +392,43 @@ export class GlobeScene {
       const timeStr = minAgo < 60 ? `${minAgo} 分鐘前` : `${Math.floor(minAgo / 60)} 小時前`;
       badgeText = 'USGS 地震';
       badgeClass = q.mag >= 6.0 ? 'badge-critical' : q.mag >= 4.5 ? 'badge-elevated' : 'badge-monitor';
-      titleText = `規模 M${q.mag.toFixed(1)} / 深度 ${q.depth.toFixed(0)}km / 地點：${q.place} / 時間：${timeStr}`;
-      detailText = `座標：${q.lat.toFixed(2)}°, ${q.lon.toFixed(2)}° (點擊聚焦視角)`;
+      titleText = `規模: M${q.mag.toFixed(1)} | 深度: ${q.depth.toFixed(0)}km | 震央: ${q.place} | 時間: ${timeStr}`;
+      detailText = `座標: ${q.lat.toFixed(2)}°, ${q.lon.toFixed(2)}° (點擊聚焦震央)`;
     } else if (userData.type === 'cctv' && userData.point) {
       const pt: CCTVPoint = userData.point;
       badgeText = '即時監視攝影機';
       badgeClass = 'badge-cctv';
-      titleText = `${pt.name} (點擊連動視窗)`;
-      detailText = `位置：${pt.city}, ${pt.country} | 類別：${pt.category.toUpperCase()}`;
+      titleText = `${pt.name}`;
+      detailText = `地點: ${pt.city}, ${pt.country} | 點擊連動下方播放矩陣`;
+    } else if (userData.type === 'cable') {
+      badgeText = '海底光纜 (Cables)';
+      badgeClass = 'badge-cable';
+      titleText = `${userData.name || '全球海底光纜'}`;
+      const len = userData.lengthKm ? `${userData.lengthKm.toLocaleString()} km` : '跨洋多節點';
+      const landing = userData.landingCity ? `據點: ${userData.landingCity}, ${userData.landingCountry}` : '國際海底高頻寬骨幹';
+      detailText = `長度: ${len} | ${landing}`;
+    } else if (userData.type === 'air_corridor' || userData.type === 'aircraft') {
+      badgeText = '國際航空 (Air Corridors)';
+      badgeClass = 'badge-air';
+      titleText = `航線代號: ${userData.code || 'AIR'} // ${userData.name}`;
+      detailText = `巡航高度: ${userData.altitude || 'FL380 (平流層 Stratosphere / 11,600m)'}`;
+    } else if (userData.type === 'maritime') {
+      badgeText = '海運航道 (Maritime)';
+      badgeClass = 'badge-maritime';
+      titleText = `${userData.name || '戰略通航航道'}`;
+      detailText = `類型: ${userData.route?.type || '戰略航運咽喉'}`;
     } else if (userData.type === 'incident' && userData.incident) {
       const inc: GeoIncident = userData.incident;
       badgeText = '全球地緣事件';
       badgeClass = inc.level === 'CRITICAL' ? 'badge-critical' : 'badge-elevated';
-      titleText = `事件：${inc.title} / 地點：${inc.location}`;
-      detailText = `情報層級：${inc.level} | 座標：${inc.lat.toFixed(2)}°, ${inc.lon.toFixed(2)}°`;
+      titleText = `事件: ${inc.title} / 地點: ${inc.location}`;
+      detailText = `情報層級: ${inc.level} | 座標: ${inc.lat.toFixed(2)}°, ${inc.lon.toFixed(2)}°`;
     } else if (userData.type === 'news' && userData.item) {
       const nw: GeoNewsItem = userData.item;
       badgeText = '即時全球新聞';
       badgeClass = 'badge-news';
-      titleText = `焦點：${nw.headline}`;
-      detailText = `來源：${nw.source} | 地點：${nw.city} (${nw.time}) | 點擊定位`;
+      titleText = `焦點: ${nw.headline}`;
+      detailText = `來源: ${nw.source} | 地點: ${nw.city} (${nw.time}) | 點擊定位`;
     } else {
       this.hideTooltip();
       return;
@@ -407,12 +446,12 @@ export class GlobeScene {
     let left = clientX + offset;
     let top = clientY + offset;
 
-    const w = 340;
+    const w = 380;
     if (left + w > window.innerWidth) {
       left = Math.max(10, clientX - w - offset);
     }
-    if (top + 80 > window.innerHeight) {
-      top = Math.max(10, clientY - 80 - offset);
+    if (top + 90 > window.innerHeight) {
+      top = Math.max(10, clientY - 90 - offset);
     }
 
     this.tooltipEl.style.left = `${left}px`;

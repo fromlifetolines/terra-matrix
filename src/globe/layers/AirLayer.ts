@@ -56,7 +56,16 @@ export class AirLayer {
       }
 
       const geom = new THREE.BufferGeometry().setFromPoints(allPoints);
+      const corridorUserData = {
+        type: 'air_corridor',
+        route,
+        code: route.id.toUpperCase(),
+        name: route.name,
+        altitude: 'FL380 (~11,600m / 平流層 Stratosphere)',
+      };
+
       const line = new THREE.Line(geom, this.lineMaterial);
+      line.userData = corridorUserData;
       this.group.add(line);
 
       // Moving glowing aircraft particles along flight corridor
@@ -67,6 +76,11 @@ export class AirLayer {
           const planeGroup = new THREE.Group();
           const coreMesh = new THREE.Mesh(coreGeo, coreMat);
           const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+
+          planeGroup.userData = corridorUserData;
+          coreMesh.userData = corridorUserData;
+          glowMesh.userData = corridorUserData;
+
           planeGroup.add(coreMesh);
           planeGroup.add(glowMesh);
 

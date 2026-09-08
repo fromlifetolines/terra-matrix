@@ -77,7 +77,7 @@ class TerraMatrixApp {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="12 8 8 12 12 16 12 8"/></svg>
             RESET VIEW
           </button>
-          <div class="utc-clock" id="tpe-clock">0000-00-00 00:00:00 TPE</div>
+          <div class="tpe-clock" id="tpe-clock">0000-00-00 00:00:00 TPE</div>
         </div>
       </header>
 
@@ -86,45 +86,37 @@ class TerraMatrixApp {
         <section class="globe-wrapper">
           <div id="globe-container"></div>
 
-          <!-- Minimal Floating Glass Pill (Top Left Whitelisted Layer Controller) -->
+          <!-- Minimal Floating Glass Pill (Top Left Intelligence Layer Controller) -->
           <div class="glass-pill-container">
             <div class="glass-pill">
               <div class="pill-header">
-                <span class="pill-title">LAYERS WHITELIST</span>
-                <span style="font-family: var(--font-mono); font-size: 9px; color: var(--accent-emerald);">8 ACTIVE</span>
+                <span class="pill-title">INTELLIGENCE LAYERS</span>
+                <span style="font-family: var(--font-mono); font-size: 9px; color: var(--accent-emerald);">6 ACTIVE</span>
               </div>
               <div class="pill-layers-list">
-                <label class="layer-toggle-item" title="Global live cameras and previews">
-                  <input type="checkbox" id="layer-cctv" checked />
-                  <span>📷 CCTV 視訊</span>
-                </label>
-                <label class="layer-toggle-item" title="Major news coordinates">
-                  <input type="checkbox" id="layer-live_news" checked />
-                  <span>📰 即時新聞</span>
+                <label class="layer-toggle-item" title="Aviation international skyways & flight corridors">
+                  <input type="checkbox" id="layer-sdk_air" checked />
+                  <span>✈️ 國際航空 (Air Corridors)</span>
                 </label>
                 <label class="layer-toggle-item" title="USGS real-time earthquake ripples">
                   <input type="checkbox" id="layer-earthquakes" checked />
-                  <span>⚡ 地震波紋</span>
+                  <span>🌋 即時地震 (Earthquakes)</span>
                 </label>
-                <label class="layer-toggle-item" title="Geopolitical critical flashpoints">
-                  <input type="checkbox" id="layer-global_incidents" checked />
-                  <span>🚨 全球事件</span>
-                </label>
-                <label class="layer-toggle-item" title="Solar day-night terminator (UTC)">
-                  <input type="checkbox" id="layer-day_night" checked />
-                  <span>🌓 日夜晨昏</span>
-                </label>
-                <label class="layer-toggle-item" title="Undersea fiber-optic cables">
+                <label class="layer-toggle-item" title="Global undersea fiber-optic cables">
                   <input type="checkbox" id="layer-cables" checked />
-                  <span>🌐 海底光纜</span>
+                  <span>🌊 海底光纜 (Cables)</span>
                 </label>
-                <label class="layer-toggle-item" title="Maritime shipping corridors">
+                <label class="layer-toggle-item" title="Global live cameras and webcams">
+                  <input type="checkbox" id="layer-cctv" checked />
+                  <span>📹 即時影像 (CCTV)</span>
+                </label>
+                <label class="layer-toggle-item" title="Strategic maritime shipping corridors">
                   <input type="checkbox" id="layer-maritime" checked />
-                  <span>🚢 戰略航道</span>
+                  <span>🚢 海運航道 (Maritime)</span>
                 </label>
-                <label class="layer-toggle-item" title="Aviation international skyways">
-                  <input type="checkbox" id="layer-sdk_air" checked />
-                  <span>✈️ 國際空域航線 (Air Corridors)</span>
+                <label class="layer-toggle-item" title="Physical astronomical day/night solar terminator">
+                  <input type="checkbox" id="layer-day_night" checked />
+                  <span>☀️ 日夜晨昏 (Day/Night)</span>
                 </label>
               </div>
             </div>
@@ -267,13 +259,23 @@ class TerraMatrixApp {
     const update = () => {
       if (clockEl) {
         const now = new Date();
-        const tpeDate = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
-        const y = tpeDate.getFullYear();
-        const m = String(tpeDate.getMonth() + 1).padStart(2, '0');
-        const d = String(tpeDate.getDate()).padStart(2, '0');
-        const hh = String(tpeDate.getHours()).padStart(2, '0');
-        const mm = String(tpeDate.getMinutes()).padStart(2, '0');
-        const ss = String(tpeDate.getSeconds()).padStart(2, '0');
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Taipei',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        });
+        const parts = formatter.formatToParts(now);
+        const y = parts.find((p) => p.type === 'year')?.value;
+        const m = parts.find((p) => p.type === 'month')?.value;
+        const d = parts.find((p) => p.type === 'day')?.value;
+        const hh = parts.find((p) => p.type === 'hour')?.value;
+        const mm = parts.find((p) => p.type === 'minute')?.value;
+        const ss = parts.find((p) => p.type === 'second')?.value;
         clockEl.textContent = `${y}-${m}-${d} ${hh}:${mm}:${ss} TPE`;
       }
     };

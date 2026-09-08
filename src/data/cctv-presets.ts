@@ -37,17 +37,17 @@ export const CCTV_PRESETS: CCTVPoint[] = [
     country: 'Taiwan',
     lat: 25.056,
     lon: 121.594,
-    videoId: 'bgkM3-83GvM',
+    videoId: '_GDAswKx6Cg',
     category: 'news'
   },
   {
     id: 'tokyo-shibuya',
-    name: '東京澀谷 Tokyo Shibuya Crossing 4K Live',
+    name: '東京澀谷街頭 4K CCTV (Shibuya Crossing Live)',
     city: 'Tokyo',
     country: 'Japan',
     lat: 35.6595,
     lon: 139.7004,
-    videoId: '8H3nRCFVR6Y',
+    videoId: '4993sBLAzGA',
     category: 'cctv'
   },
   {
@@ -133,9 +133,8 @@ export const CCTV_PRESETS: CCTVPoint[] = [
 ];
 
 export const DEFAULT_MATRIX_CHANNELS: CCTVPoint[] = [
-  CCTV_PRESETS[0], // 公視新聞台 PTS Live
-  CCTV_PRESETS[1], // 華視新聞 CTS Live
-  CCTV_PRESETS[2], // 中視新聞 CTV Live
-  CCTV_PRESETS[3], // 東京澀谷街頭 4K CCTV
-  CCTV_PRESETS[4], // 阿里山二延平步道 4K 即時影像
+  CCTV_PRESETS[0], // 公視新聞台 PTS Live (wM0g8EoUZ_E)
+  CCTV_PRESETS[1], // 華視新聞 CTS Live CH52 (TL8MMGiF0hA)
+  CCTV_PRESETS[2], // 中視新聞 CTV Live (_GDAswKx6Cg)
+  CCTV_PRESETS[3], // 東京澀谷街頭 4K CCTV (4993sBLAzGA)
 ];

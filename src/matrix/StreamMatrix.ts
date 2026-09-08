@@ -1,6 +1,6 @@
 import { DEFAULT_MATRIX_CHANNELS, CCTV_PRESETS, type CCTVPoint } from '../data/cctv-presets';
 
-export type MatrixGridLayout = '1x1' | '1x2' | '2x2' | '2x3' | '2x4' | '3x3' | 'auto';
+export type MatrixGridLayout = '1x1' | '1x2' | '2x2' | '2x3' | '2x4' | '3x3' | '3x4' | 'auto';
 
 export interface MatrixChannel {
   id: string;
@@ -10,8 +10,8 @@ export interface MatrixChannel {
   country?: string;
 }
 
-const STORAGE_CHANNELS_KEY = 'terra_matrix_channels_v3';
-const STORAGE_LAYOUT_KEY = 'terra_matrix_layout_v3';
+const STORAGE_CHANNELS_KEY = 'terra_matrix_channels_v4';
+const STORAGE_LAYOUT_KEY = 'terra_matrix_layout_v4';
 
 export class StreamMatrix {
   private container: HTMLElement;
@@ -31,10 +31,10 @@ export class StreamMatrix {
 
   private loadState(): void {
     try {
-      // Check v3 storage first, fallback to v2 with automatic cleanup
+      // Check v4 storage first, fallback to v3/v2 with automatic migration
       let savedChannels = localStorage.getItem(STORAGE_CHANNELS_KEY);
       if (!savedChannels) {
-        savedChannels = localStorage.getItem('terra_matrix_channels_v2');
+        savedChannels = localStorage.getItem('terra_matrix_channels_v3') || localStorage.getItem('terra_matrix_channels_v2');
       }
 
       if (savedChannels) {
@@ -45,7 +45,7 @@ export class StreamMatrix {
           (ch) => ch.id !== 'sydney-harbour' && ch.videoId !== '7pcL-0Wo77U' && ch.videoId !== 'xL0ch83RAK8'
         );
 
-        // Auto-migrate legacy channel IDs
+        // Auto-migrate legacy channel IDs to 100% verified working streams
         parsed = parsed.map((ch) => {
           if (ch.id === 'ttv-news') {
             return {
@@ -56,17 +56,29 @@ export class StreamMatrix {
               country: 'Taiwan',
             };
           }
-          if (ch.id === 'tokyo-shibuya' && ch.videoId !== '8H3nRCFVR6Y') {
+          if (ch.id === 'ctv-news' || ch.name.includes('中視')) {
             return {
-              ...ch,
-              videoId: '8H3nRCFVR6Y',
+              id: 'ctv-news',
+              name: '中視新聞 CTV News Live 24H',
+              videoId: '_GDAswKx6Cg',
+              city: 'Taipei',
+              country: 'Taiwan',
+            };
+          }
+          if (ch.id === 'tokyo-shibuya' || ch.name.includes('澀谷') || ch.name.includes('Shibuya')) {
+            return {
+              id: 'tokyo-shibuya',
+              name: '東京澀谷街頭 4K CCTV (Shibuya Crossing Live)',
+              videoId: '4993sBLAzGA',
+              city: 'Tokyo',
+              country: 'Japan',
             };
           }
           return ch;
         });
 
-        // If after cleaning we have fewer than 3 channels, populate with default channels
-        if (parsed.length < 3) {
+        // If after cleaning we have fewer than 4 channels, ensure default 4 feeds
+        if (parsed.length < 4) {
           this.channels = DEFAULT_MATRIX_CHANNELS.map((c) => ({
             id: c.id,
             name: c.name,
@@ -87,8 +99,8 @@ export class StreamMatrix {
         }));
       }
 
-      const savedLayout = localStorage.getItem(STORAGE_LAYOUT_KEY) || localStorage.getItem('terra_matrix_layout_v2');
-      if (savedLayout && ['1x1', '1x2', '2x2', '2x3', '2x4', '3x3', 'auto'].includes(savedLayout)) {
+      const savedLayout = localStorage.getItem(STORAGE_LAYOUT_KEY) || localStorage.getItem('terra_matrix_layout_v3') || localStorage.getItem('terra_matrix_layout_v2');
+      if (savedLayout && ['1x1', '1x2', '2x2', '2x3', '2x4', '3x3', '3x4', 'auto'].includes(savedLayout)) {
         this.currentLayout = savedLayout as MatrixGridLayout;
       }
     } catch (e) {
@@ -278,7 +290,7 @@ export class StreamMatrix {
             </select>
           </div>
 
-          <!-- Expanded Layout Switcher (1x1, 1x2, 2x2, 2x3, 2x4, 3x3, AUTO) -->
+          <!-- Expanded Layout Switcher (1x1, 1x2, 2x2, 2x3, 2x4, 3x3, 3x4, AUTO) -->
           <div class="matrix-layout-presets">
             <button class="layout-btn ${this.currentLayout === '1x1' ? 'active' : ''}" data-layout="1x1" title="1×1 (Single Feed Full View)">1×1</button>
             <button class="layout-btn ${this.currentLayout === '1x2' ? 'active' : ''}" data-layout="1x2" title="1×2 (Dual Split Comparison)">1×2</button>
@@ -286,6 +298,7 @@ export class StreamMatrix {
             <button class="layout-btn ${this.currentLayout === '2x3' ? 'active' : ''}" data-layout="2x3" title="2×3 (6 Feeds Matrix)">2×3</button>
             <button class="layout-btn ${this.currentLayout === '2x4' ? 'active' : ''}" data-layout="2x4" title="2×4 (8 Feeds Matrix)">2×4</button>
             <button class="layout-btn ${this.currentLayout === '3x3' ? 'active' : ''}" data-layout="3x3" title="3×3 (9 Feeds Matrix)">3×3</button>
+            <button class="layout-btn ${this.currentLayout === '3x4' ? 'active' : ''}" data-layout="3x4" title="3×4 (12 Feeds Matrix)">3×4</button>
             <button class="layout-btn ${this.currentLayout === 'auto' ? 'active' : ''}" data-layout="auto" title="AUTO (Adaptive Fill)">AUTO</button>
           </div>
         </div>

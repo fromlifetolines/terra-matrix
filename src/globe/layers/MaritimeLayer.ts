@@ -37,13 +37,21 @@ export class MaritimeLayer {
       }
 
       const geom = new THREE.BufferGeometry().setFromPoints(allPoints);
+      const maritimeUserData = {
+        type: 'maritime',
+        route,
+        name: route.name,
+      };
+
       const line = new THREE.Line(geom, this.lineMaterial);
+      line.userData = maritimeUserData;
       this.group.add(line);
 
       // Add a moving ship along route
       if (allPoints.length > 2) {
         const shipMat = new THREE.MeshBasicMaterial({ color: 0x34d399 });
         const shipMesh = new THREE.Mesh(shipGeo, shipMat);
+        shipMesh.userData = maritimeUserData;
         this.group.add(shipMesh);
 
         this.ships.push({
