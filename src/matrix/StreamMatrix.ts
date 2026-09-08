@@ -1,6 +1,7 @@
 import { DEFAULT_MATRIX_CHANNELS, CCTV_PRESETS, type CCTVPoint } from '../data/cctv-presets';
 
-export type MatrixGridLayout = '1x1' | '1x2' | '2x2' | '2x3' | '2x4' | '3x3' | '3x4' | 'auto';
+export const GRID_LAYOUTS = ['1x1', '1x2', '2x2', '2x3', '2x4', '3x3'] as const;
+export type MatrixGridLayout = typeof GRID_LAYOUTS[number] | 'auto';
 
 export interface MatrixChannel {
   id: string;
@@ -272,17 +273,16 @@ export class StreamMatrix {
               type="text" 
               id="matrix-add-name" 
               class="matrix-input matrix-name-input" 
-              placeholder="Channel Name..." 
+              placeholder="頻道名稱 (例如: 東京街景)" 
             />
             <input 
               type="text" 
               id="matrix-add-input" 
               class="matrix-input matrix-url-input" 
-              placeholder="YouTube URL or Video ID..." 
+              placeholder="YouTube 網址或 ID" 
             />
             <button id="matrix-add-btn" class="matrix-btn">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              + ADD FEED
+              + ADD 按鈕
             </button>
             <select id="matrix-preset-select" class="matrix-select" title="Preset Channels">
               <option value="" disabled selected>Presets...</option>
@@ -290,21 +290,20 @@ export class StreamMatrix {
             </select>
           </div>
 
-          <!-- Expanded Layout Switcher (1x1, 1x2, 2x2, 2x3, 2x4, 3x3, 3x4, AUTO) -->
+          <!-- Expanded Layout Switcher (Rendered via array: ['1x1', '1x2', '2x2', '2x3', '2x4', '3x3']) -->
           <div class="matrix-layout-presets">
-            <button class="layout-btn ${this.currentLayout === '1x1' ? 'active' : ''}" data-layout="1x1" title="1×1 (Single Feed Full View)">1×1</button>
-            <button class="layout-btn ${this.currentLayout === '1x2' ? 'active' : ''}" data-layout="1x2" title="1×2 (Dual Split Comparison)">1×2</button>
-            <button class="layout-btn ${this.currentLayout === '2x2' ? 'active' : ''}" data-layout="2x2" title="2×2 (Standard 4 Quad)">2×2</button>
-            <button class="layout-btn ${this.currentLayout === '2x3' ? 'active' : ''}" data-layout="2x3" title="2×3 (6 Feeds Matrix)">2×3</button>
-            <button class="layout-btn ${this.currentLayout === '2x4' ? 'active' : ''}" data-layout="2x4" title="2×4 (8 Feeds Matrix)">2×4</button>
-            <button class="layout-btn ${this.currentLayout === '3x3' ? 'active' : ''}" data-layout="3x3" title="3×3 (9 Feeds Matrix)">3×3</button>
-            <button class="layout-btn ${this.currentLayout === '3x4' ? 'active' : ''}" data-layout="3x4" title="3×4 (12 Feeds Matrix)">3×4</button>
-            <button class="layout-btn ${this.currentLayout === 'auto' ? 'active' : ''}" data-layout="auto" title="AUTO (Adaptive Fill)">AUTO</button>
+            ${GRID_LAYOUTS.map(
+              (layout) => `
+              <button class="layout-btn ${this.currentLayout === layout ? 'active' : ''}" data-layout="${layout}" title="${layout}">
+                ${layout}
+              </button>
+            `
+            ).join('')}
           </div>
         </div>
 
         <!-- Scrollable Matrix Video Grid -->
-        <div class="matrix-scroll-container">
+        <div class="matrix-scroll-container" style="max-height: 50vh; overflow-y: auto;">
           <div class="matrix-grid grid-${this.currentLayout} ${this.fullscreenTileId ? 'has-fullscreen-tile' : ''}">
             ${
               activeChannels.length === 0
@@ -324,30 +323,18 @@ export class StreamMatrix {
                       <span class="tile-name" title="${ch.name}">${ch.name}</span>
                     </div>
                     <div class="tile-actions">
-                      <!-- Edit Link Button -->
-                      <button class="tile-btn edit-btn" data-id="${ch.id}" title="Edit Name & Stream URL">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
-                      </button>
-                      <!-- Popout Window Button -->
-                      <button class="tile-btn popout-btn" data-videoid="${ch.videoId}" title="Open Stream in New Tab (Popout)">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                      </button>
+                      <!-- ✏️ (編輯此格) -->
+                      <button class="tile-btn edit-btn" data-id="${ch.id}" title="✏️ 編輯此格">✏️</button>
+                      <!-- ↗️ (開新分頁播放，避開版權阻擋) -->
+                      <button class="tile-btn popout-btn" data-videoid="${ch.videoId}" title="↗️ 開新分頁播放 (避開版權阻擋)">↗️</button>
                       <!-- Audio Solo Button -->
-                      <button class="tile-btn solo-btn ${isSolo ? 'active-solo' : ''}" id="solo-btn-${ch.id}" data-id="${ch.id}" title="${isSolo ? 'Audio: SOLO (Active)' : 'Audio: Muted'}">
-                        ${
-                          isSolo
-                            ? `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`
-                            : `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`
-                        }
+                      <button class="tile-btn solo-btn ${isSolo ? 'active-solo' : ''}" id="solo-btn-${ch.id}" data-id="${ch.id}" title="${isSolo ? '靜音' : '原音'}">
+                        ${isSolo ? '🔊' : '🔇'}
                       </button>
                       <!-- Fullscreen Button -->
-                      <button class="tile-btn fullscreen-btn" data-id="${ch.id}" title="Toggle Tile Fullscreen">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
-                      </button>
-                      <!-- Delete Button -->
-                      <button class="tile-btn remove-btn" data-id="${ch.id}" title="Remove Tile">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                      </button>
+                      <button class="tile-btn fullscreen-btn" data-id="${ch.id}" title="單格全螢幕">⛶</button>
+                      <!-- ✕ (刪除此格) -->
+                      <button class="tile-btn remove-btn" data-id="${ch.id}" title="✕ 刪除此格">✕</button>
                     </div>
                   </div>
 

@@ -1,16 +1,8 @@
+import Globe, { type GlobeInstance } from 'globe.gl';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { createEarthMaterial, createAtmosphereMaterial, createCloudsMaterial } from './EarthShader';
-import { getSunDirectionVector } from '../utils/solar';
-import { latLonToVector3 } from '../utils/coordinates';
-import { CablesLayer } from './layers/CablesLayer';
-import { EarthquakeLayer, type EarthquakeItem } from './layers/EarthquakeLayer';
-import { CctvLayer } from './layers/CctvLayer';
-import { NewsLayer } from './layers/NewsLayer';
-import { IncidentsLayer } from './layers/IncidentsLayer';
-import { MaritimeLayer } from './layers/MaritimeLayer';
-import { AirLayer } from './layers/AirLayer';
-import type { CCTVPoint } from '../data/cctv-presets';
+import { CCTV_PRESETS, type CCTVPoint } from '../data/cctv-presets';
+import { UNDERSEA_CABLES } from '../data/cables';
+import type { EarthquakeItem } from './layers/EarthquakeLayer';
 import type { GeoIncident, GeoNewsItem } from '../data/incidents-news';
 
 export interface GlobeLayerState {
@@ -26,33 +18,10 @@ export interface GlobeLayerState {
 
 export class GlobeScene {
   private container: HTMLElement;
-  private scene!: THREE.Scene;
-  private camera!: THREE.PerspectiveCamera;
-  private renderer!: THREE.WebGLRenderer;
-  private controls!: OrbitControls;
-
-  private earthMesh!: THREE.Mesh;
-  private earthMaterial!: THREE.ShaderMaterial;
-  private cloudsMesh!: THREE.Mesh;
-  private cloudsMaterial!: THREE.ShaderMaterial;
-  private atmosphereMesh!: THREE.Mesh;
-  private atmosphereMaterial!: THREE.ShaderMaterial;
-  private tooltipEl!: HTMLElement;
-
-  public cablesLayer!: CablesLayer;
-  public earthquakeLayer!: EarthquakeLayer;
-  public cctvLayer!: CctvLayer;
-  public newsLayer!: NewsLayer;
-  public incidentsLayer!: IncidentsLayer;
-  public maritimeLayer!: MaritimeLayer;
-  public airLayer!: AirLayer;
-
-  private raycaster = new THREE.Raycaster();
-  private mouse = new THREE.Vector2();
-
-  private earthRadius = 100;
-  private isAnimating = false;
-  private clock = new THREE.Clock();
+  private globe!: GlobeInstance;
+  private earthquakes: EarthquakeItem[] = [];
+  private cloudsMesh?: THREE.Mesh;
+  private isDestroyed = false;
 
   public onSelectCctv?: (point: CCTVPoint) => void;
   public onSelectEarthquake?: (quake: EarthquakeItem) => void;
@@ -72,539 +41,279 @@ export class GlobeScene {
 
   constructor(container: HTMLElement) {
     this.container = container;
-
-    try {
-      // Scene
-      this.scene = new THREE.Scene();
-      this.scene.background = new THREE.Color(0x050507);
-
-      // Camera
-      const aspect = container.clientWidth / (container.clientHeight || 1);
-      this.camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 2000);
-      this.camera.position.set(0, 30, 260);
-
-      // Renderer
-      this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
-      this.renderer.setSize(container.clientWidth, container.clientHeight);
-      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      this.renderer.toneMappingExposure = 1.1;
-      container.appendChild(this.renderer.domElement);
-
-      // Controls
-      this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-      this.controls.enableDamping = true;
-      this.controls.dampingFactor = 0.05;
-      this.controls.rotateSpeed = 0.65;
-      this.controls.minDistance = 115;
-      this.controls.maxDistance = 500;
-      this.controls.autoRotate = true;
-      this.controls.autoRotateSpeed = 0.25;
-
-      this.initStars();
-      this.initEarth();
-      this.initLayers();
-      this.initEvents();
-
-      this.start();
-    } catch (err) {
-      console.error('[GlobeScene] WebGL initialization failed, rendering tactical 2D fallback:', err);
-      container.innerHTML = `
-        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;width:100%;background:#050507;color:#9ca3af;font-family:'JetBrains Mono',monospace;text-align:center;padding:20px;box-sizing:border-box;">
-          <div style="color:#10b981;font-size:16px;font-weight:700;margin-bottom:8px;letter-spacing:0.1em;">TERRA MATRIX // 2D TACTICAL MODE</div>
-          <div style="font-size:12px;max-width:480px;line-height:1.6;color:#6b7280;">3D WebGL acceleration context unavailable or degraded in this browser environment. The Swiss Grid Live Video Matrix below is fully operational.</div>
-        </div>
-      `;
-      // Dummy stubs so public API methods don't crash
-      this.cablesLayer = { setVisible: () => {} } as unknown as CablesLayer;
-      this.earthquakeLayer = { setVisible: () => {} } as unknown as EarthquakeLayer;
-      this.cctvLayer = { setVisible: () => {} } as unknown as CctvLayer;
-      this.newsLayer = { setVisible: () => {} } as unknown as NewsLayer;
-      this.incidentsLayer = { setVisible: () => {} } as unknown as IncidentsLayer;
-      this.maritimeLayer = { setVisible: () => {} } as unknown as MaritimeLayer;
-      this.airLayer = { setVisible: () => {} } as unknown as AirLayer;
-    }
+    this.initGlobe();
+    void this.fetchEarthquakes();
   }
 
-  private initStars(): void {
-    const starCount = 1200;
-    const starGeo = new THREE.BufferGeometry();
-    const positions = new Float32Array(starCount * 3);
-    const colors = new Float32Array(starCount * 3);
+  private initGlobe(): void {
+    const createGlobe = Globe as unknown as (config?: any) => (el: HTMLElement) => GlobeInstance;
+    
+    const BLUE_MARBLE_URL = 'https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg';
+    const NIGHT_LIGHTS_URL = 'https://unpkg.com/three-globe/example/img/earth-night.jpg';
+    const WATER_SPECULAR_URL = 'https://unpkg.com/three-globe/example/img/earth-water.png';
+    const TOPOLOGY_URL = 'https://unpkg.com/three-globe/example/img/earth-topology.png';
+    const CLOUDS_URL = 'https://unpkg.com/three-globe/example/img/earth-clouds.png';
 
-    for (let i = 0; i < starCount; i++) {
-      const radius = 600 + Math.random() * 400;
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(Math.random() * 2 - 1);
+    const texLoader = new THREE.TextureLoader();
 
-      positions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
-      positions[i * 3 + 1] = radius * Math.cos(phi);
-      positions[i * 3 + 2] = radius * Math.sin(phi) * Math.sin(theta);
-
-      const brightness = 0.4 + Math.random() * 0.6;
-      colors[i * 3] = brightness;
-      colors[i * 3 + 1] = brightness * 0.95;
-      colors[i * 3 + 2] = brightness * 1.1;
-    }
-
-    starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-    const starMat = new THREE.PointsMaterial({
-      size: 1.6,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.75,
-    });
-
-    const starPoints = new THREE.Points(starGeo, starMat);
-    this.scene.add(starPoints);
-  }
-
-  private createFallbackTexture(color = '#1e293b'): THREE.CanvasTexture {
-    const canvas = document.createElement('canvas');
-    canvas.width = 16;
-    canvas.height = 16;
-    const ctx = canvas.getContext('2d');
-    if (ctx) {
-      ctx.fillStyle = color;
-      ctx.fillRect(0, 0, 16, 16);
-    }
-    return new THREE.CanvasTexture(canvas);
-  }
-
-  private initEarth(): void {
-    const getAssetUrl = (filename: string): string => {
-      const base = (import.meta.env.BASE_URL || '/terra-matrix/').replace(/\/+$/, '') + '/';
-      return `${base}${filename.replace(/^\/+/, '')}`;
+    const configureTex = (tex: THREE.Texture) => {
+      tex.anisotropy = 16;
+      tex.minFilter = THREE.LinearMipmapLinearFilter;
+      tex.magFilter = THREE.LinearFilter;
+      tex.generateMipmaps = true;
+      tex.needsUpdate = true;
+      return tex;
     };
 
-    const textureLoader = new THREE.TextureLoader();
+    const dayTex = texLoader.load(BLUE_MARBLE_URL, configureTex);
+    const nightTex = texLoader.load(NIGHT_LIGHTS_URL, configureTex);
+    const specularTex = texLoader.load(WATER_SPECULAR_URL, configureTex);
+    const bumpTex = texLoader.load(TOPOLOGY_URL, configureTex);
 
-    const loadSafe = (path: string, fallbackColor: string): THREE.Texture => {
-      return textureLoader.load(
-        getAssetUrl(path),
-        (tex) => {
-          tex.wrapS = THREE.ClampToEdgeWrapping;
-          tex.wrapT = THREE.ClampToEdgeWrapping;
-          tex.generateMipmaps = true;
-          tex.minFilter = THREE.LinearMipmapLinearFilter;
-          tex.magFilter = THREE.LinearFilter;
-          if (this.renderer) {
-            tex.anisotropy = Math.min(16, this.renderer.capabilities.getMaxAnisotropy());
-          } else {
-            tex.anisotropy = 16;
-          }
-          tex.needsUpdate = true;
-        },
-        undefined,
-        (err) => {
-          console.warn(`[GlobeScene] Failed to load texture ${path}, using fallback:`, err);
-        }
+    // Custom Globe Material blending day Blue Marble, night lights, water specular and bump
+    const customGlobeMaterial = new THREE.MeshPhongMaterial({
+      map: dayTex,
+      bumpMap: bumpTex,
+      bumpScale: 0.04,
+      specularMap: specularTex,
+      specular: new THREE.Color(0x334455),
+      shininess: 20,
+    });
+
+    customGlobeMaterial.onBeforeCompile = (shader) => {
+      shader.uniforms.nightTexture = { value: nightTex };
+      shader.vertexShader = `
+        varying vec3 vWorldNormal;
+        ${shader.vertexShader}
+      `.replace(
+        '#include <worldpos_vertex>',
+        `#include <worldpos_vertex>
+         vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);`
+      );
+      shader.fragmentShader = `
+        uniform sampler2D nightTexture;
+        varying vec3 vWorldNormal;
+        ${shader.fragmentShader}
+      `.replace(
+        '#include <dithering_fragment>',
+        `#include <dithering_fragment>
+         float sunDot = dot(vWorldNormal, normalize(vec3(0.8, 0.4, 0.6)));
+         if (sunDot < 0.15) {
+           vec4 nightCol = texture2D(nightTexture, vUv);
+           float factor = smoothstep(0.15, -0.2, sunDot);
+           gl_FragColor.rgb += nightCol.rgb * factor * 1.6;
+         }
+        `
       );
     };
 
-    const dayTexture = loadSafe('earth-blue-marble.jpg', '#0f172a');
-    const nightTexture = loadSafe('earth_lights.png', '#020617');
-    const normalTexture = loadSafe('earth_normal.jpg', '#8080ff');
-    const specularTexture = loadSafe('earth_specular.jpg', '#000000');
-    const cloudTexture = loadSafe('earth_clouds.png', '#ffffff');
+    this.globe = createGlobe({
+      rendererConfig: {
+        antialias: true,
+        alpha: false,
+        powerPreference: 'high-performance',
+      },
+    })(this.container)
+      .globeImageUrl(BLUE_MARBLE_URL)
+      .bumpImageUrl(TOPOLOGY_URL)
+      .globeMaterial(customGlobeMaterial)
+      .backgroundColor('#050507')
+      .atmosphereColor('#3a82f7')
+      .atmosphereAltitude(0.18)
+      .width(this.container.clientWidth)
+      .height(this.container.clientHeight || 500);
 
-    // Earth Sphere Geometry
-    const earthGeometry = new THREE.SphereGeometry(this.earthRadius, 96, 96);
-    try {
-      this.earthMaterial = createEarthMaterial({
-        day: dayTexture,
-        night: nightTexture,
-        normal: normalTexture,
-        specular: specularTexture,
+    texLoader.load(CLOUDS_URL, (cloudsTexture) => {
+      configureTex(cloudsTexture);
+      const globeRadius = this.globe.getGlobeRadius ? this.globe.getGlobeRadius() : 100;
+      const cloudsGeo = new THREE.SphereGeometry(globeRadius * 1.006, 75, 75);
+      const cloudsMat = new THREE.MeshPhongMaterial({
+        map: cloudsTexture,
+        transparent: true,
+        opacity: 0.6,
+        depthWrite: false,
       });
-    } catch (err) {
-      console.warn('[GlobeScene] Custom EarthShader failed, using fallback StandardMaterial:', err);
-      this.earthMaterial = new THREE.MeshStandardMaterial({
-        map: dayTexture,
-        roughness: 0.8,
-        metalness: 0.1,
-      }) as unknown as THREE.ShaderMaterial;
-    }
 
-    this.earthMesh = new THREE.Mesh(earthGeometry, this.earthMaterial);
-    this.scene.add(this.earthMesh);
+      this.cloudsMesh = new THREE.Mesh(cloudsGeo, cloudsMat);
+      this.globe.scene().add(this.cloudsMesh);
 
-    // Independent Cloud Sphere Layer (Tropospheric convective clouds)
-    try {
-      const cloudsGeometry = new THREE.SphereGeometry(this.earthRadius * 1.005, 96, 96);
-      this.cloudsMaterial = createCloudsMaterial(cloudTexture);
-      this.cloudsMesh = new THREE.Mesh(cloudsGeometry, this.cloudsMaterial);
-      this.scene.add(this.cloudsMesh);
-    } catch (err) {
-      console.warn('[GlobeScene] Cloud sphere layer failed to initialize:', err);
-    }
-
-    // Outer Atmosphere Halo Mesh
-    try {
-      const atmosphereGeometry = new THREE.SphereGeometry(this.earthRadius * 1.018, 64, 64);
-      this.atmosphereMaterial = createAtmosphereMaterial();
-      this.atmosphereMesh = new THREE.Mesh(atmosphereGeometry, this.atmosphereMaterial);
-      this.scene.add(this.atmosphereMesh);
-    } catch (err) {
-      console.warn('[GlobeScene] Atmosphere halo failed to initialize:', err);
-    }
-  }
-
-  private initLayers(): void {
-    this.cablesLayer = new CablesLayer(this.earthRadius);
-    this.scene.add(this.cablesLayer.group);
-
-    this.earthquakeLayer = new EarthquakeLayer(this.earthRadius);
-    this.scene.add(this.earthquakeLayer.group);
-
-    this.cctvLayer = new CctvLayer(this.earthRadius);
-    this.scene.add(this.cctvLayer.group);
-
-    this.newsLayer = new NewsLayer(this.earthRadius);
-    this.scene.add(this.newsLayer.group);
-
-    this.incidentsLayer = new IncidentsLayer(this.earthRadius);
-    this.scene.add(this.incidentsLayer.group);
-
-    this.maritimeLayer = new MaritimeLayer(this.earthRadius);
-    this.scene.add(this.maritimeLayer.group);
-
-    this.airLayer = new AirLayer(this.earthRadius);
-    this.scene.add(this.airLayer.group);
-  }
-
-  private initEvents(): void {
-    window.addEventListener('resize', this.onWindowResize.bind(this));
-
-    // Create Swiss HUD floating tooltip
-    this.tooltipEl = document.createElement('div');
-    this.tooltipEl.className = 'globe-hud-tooltip';
-    this.tooltipEl.style.display = 'none';
-    document.body.appendChild(this.tooltipEl);
-
-    this.raycaster.params.Line = { threshold: 3.5 };
-
-    const canvas = this.renderer.domElement;
-    canvas.addEventListener('pointerdown', () => {
-      this.controls.autoRotate = false;
-    });
-
-    const getRaycastUserData = (intersects: THREE.Intersection[]): any | null => {
-      for (const hit of intersects) {
-        let current: THREE.Object3D | null = hit.object;
-        while (current && current !== this.scene) {
-          if (current.userData && current.userData.type) {
-            return current.userData;
-          }
-          current = current.parent;
+      const rotateClouds = () => {
+        if (this.isDestroyed) return;
+        if (this.cloudsMesh) {
+          this.cloudsMesh.rotation.y += 0.0003;
         }
-      }
-      return null;
-    };
-
-    canvas.addEventListener('pointermove', (e) => {
-      const rect = canvas.getBoundingClientRect();
-      this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-
-      this.raycaster.setFromCamera(this.mouse, this.camera);
-      
-      const targets: THREE.Object3D[] = [];
-      if (this.layerStates.cctv) targets.push(...this.cctvLayer.group.children);
-      if (this.layerStates.earthquakes) targets.push(...this.earthquakeLayer.group.children);
-      if (this.layerStates.sdk_air) targets.push(...this.airLayer.group.children);
-      if (this.layerStates.cables) targets.push(...this.cablesLayer.group.children);
-      if (this.layerStates.maritime) targets.push(...this.maritimeLayer.group.children);
-      if (this.layerStates.global_incidents) targets.push(...this.incidentsLayer.group.children);
-      if (this.layerStates.live_news) targets.push(...this.newsLayer.group.children);
-
-      const intersects = this.raycaster.intersectObjects(targets, true);
-      const userData = getRaycastUserData(intersects);
-      if (userData) {
-        canvas.style.cursor = 'pointer';
-        this.updateTooltip(userData, e.clientX, e.clientY);
-      } else {
-        canvas.style.cursor = 'grab';
-        this.hideTooltip();
-      }
+        requestAnimationFrame(rotateClouds);
+      };
+      rotateClouds();
     });
 
-    canvas.addEventListener('pointerleave', () => {
-      this.hideTooltip();
-    });
-
-    canvas.addEventListener('click', (e) => {
-      const rect = canvas.getBoundingClientRect();
-      this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-
-      this.raycaster.setFromCamera(this.mouse, this.camera);
-      
-      const targets: THREE.Object3D[] = [];
-      if (this.layerStates.cctv) targets.push(...this.cctvLayer.group.children);
-      if (this.layerStates.earthquakes) targets.push(...this.earthquakeLayer.group.children);
-      if (this.layerStates.sdk_air) targets.push(...this.airLayer.group.children);
-      if (this.layerStates.cables) targets.push(...this.cablesLayer.group.children);
-      if (this.layerStates.maritime) targets.push(...this.maritimeLayer.group.children);
-      if (this.layerStates.global_incidents) targets.push(...this.incidentsLayer.group.children);
-      if (this.layerStates.live_news) targets.push(...this.newsLayer.group.children);
-
-      const intersects = this.raycaster.intersectObjects(targets, true);
-      const userData = getRaycastUserData(intersects);
-      if (userData) {
-        if (userData.type === 'cctv' && userData.point) {
-          const pt = userData.point as CCTVPoint;
-          this.focusCoordinates(pt.lat, pt.lon);
-          this.onSelectCctv?.(pt);
-        } else if (userData.type === 'earthquake' && userData.quake) {
-          const q = userData.quake as EarthquakeItem;
-          this.focusCoordinates(q.lat, q.lon);
-          this.onSelectEarthquake?.(q);
-        } else if (userData.type === 'incident' && userData.incident) {
-          const inc = userData.incident as GeoIncident;
-          this.focusCoordinates(inc.lat, inc.lon);
-          this.onSelectIncident?.(inc);
-        } else if (userData.type === 'news' && userData.item) {
-          const nw = userData.item as GeoNewsItem;
-          this.focusCoordinates(nw.lat, nw.lon);
-          this.onSelectNews?.(nw);
+    this.globe
+      .pointLat((d: any) => d.lat)
+      .pointLng((d: any) => (d.lon !== undefined ? d.lon : d.lng))
+      .pointColor((d: any) => (d.type === 'cctv' ? '#06b6d4' : d.mag >= 6 ? '#ef4444' : '#f59e0b'))
+      .pointAltitude((d: any) => (d.type === 'cctv' ? 0.02 : 0.015))
+      .pointRadius((d: any) => (d.type === 'cctv' ? 0.45 : Math.max(0.3, (d.mag || 3) * 0.12)))
+      .pointLabel((d: any) => {
+        const labelText = d.id === 'tokyo-shibuya' ? '東京澀谷十字路口' : d.name;
+        if (d.type === 'cctv') {
+          return `<div style="background: rgba(0,0,0,0.8); border: 1px solid #333; padding: 8px; color: white; font-family: monospace;">[CCTV] ${labelText}</div>`;
         }
-      }
-    });
+        if (d.type === 'earthquake') {
+          return `<div style="background: rgba(0,0,0,0.8); border: 1px solid #333; padding: 8px; color: white; font-family: monospace;">[USGS] M${d.mag} ${d.place}</div>`;
+        }
+        return `<div style="background: rgba(0,0,0,0.8); border: 1px solid #333; padding: 8px; color: white; font-family: monospace;">${labelText}</div>`;
+      })
+      .onPointClick((point: any) => {
+        const lat = point.lat;
+        const lng = point.lon !== undefined ? point.lon : point.lng;
+        this.globe.pointOfView({ lat, lng, altitude: 0.5 }, 1000);
+
+        if (point.type === 'cctv' || point.videoId) {
+          this.onSelectCctv?.(point);
+        } else if (point.type === 'earthquake') {
+          this.onSelectEarthquake?.(point);
+        }
+      });
+
+    this.initAirArcs();
+    this.initCables();
+
+    const controls = this.globe.controls();
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.35;
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    this.globe.pointOfView({ lat: 24, lng: 121, altitude: 2.2 }, 1000);
+
+    window.addEventListener('resize', this.onResize);
+    this.updateVisibleData();
   }
 
-  private updateTooltip(userData: any, clientX: number, clientY: number): void {
-    if (!this.tooltipEl || !userData || !userData.type) {
-      this.hideTooltip();
-      return;
+  private initAirArcs(): void {
+    const airArcs = [
+      { id: 'tpe-lax', code: 'TPE-LAX', name: '台北 - 洛杉磯 跨太平洋航空走廊', startLat: 25.0797, startLng: 121.2342, endLat: 33.9416, endLng: -118.4085, initialGap: 0 },
+      { id: 'tpe-nrt', code: 'TPE-NRT', name: '台北 - 東京成田 國際航線', startLat: 25.0797, startLng: 121.2342, endLat: 35.7720, endLng: 140.3929, initialGap: 0.3 },
+      { id: 'tpe-sin', code: 'TPE-SIN', name: '台北 - 新加坡 樟宜國際航線', startLat: 25.0797, startLng: 121.2342, endLat: 1.3644, endLng: 103.9915, initialGap: 0.6 },
+      { id: 'lhr-jfk', code: 'LHR-JFK', name: '北大西洋航路 NAT-Track', startLat: 51.4700, startLng: -0.4543, endLat: 40.6413, endLng: -73.7781, initialGap: 0.1 },
+      { id: 'nrt-sfo', code: 'NRT-SFO', name: '跨太平洋極地走廊', startLat: 35.7720, startLng: 140.3929, endLat: 37.6213, endLng: -122.3790, initialGap: 0.4 },
+      { id: 'fra-sin', code: 'FRA-SIN', name: '歐亞大陸樞紐航線', startLat: 50.0379, startLng: 8.5622, endLat: 1.3644, endLng: 103.9915, initialGap: 0.7 },
+      { id: 'dxb-syd', code: 'DXB-SYD', name: '中東 - 澳洲遠程空運走廊', startLat: 25.2532, startLng: 55.3657, endLat: -33.9399, endLng: 151.1753, initialGap: 0.2 },
+      { id: 'cdg-hnd', code: 'CDG-HND', name: '巴黎 - 東京羽田', startLat: 49.0097, startLng: 2.5479, endLat: 35.5494, endLng: 139.7798, initialGap: 0.5 },
+      { id: 'jfk-lax', code: 'JFK-LAX', name: '美洲大陸橫貫幹線', startLat: 40.6413, startLng: -73.7781, endLat: 33.9416, endLng: -118.4085, initialGap: 0.8 },
+    ];
+
+    this.globe
+      .arcsData(this.layerStates.sdk_air ? airArcs : [])
+      .arcStartLat((d: any) => d.startLat)
+      .arcStartLng((d: any) => d.startLng)
+      .arcEndLat((d: any) => d.endLat)
+      .arcEndLng((d: any) => d.endLng)
+      .arcColor(() => ['#ffffff', '#f8fafc', '#e2e8f0'])
+      .arcAltitude(0.24)
+      .arcStroke(0.65)
+      .arcDashLength(0.4)
+      .arcDashGap(0.2)
+      .arcDashInitialGap((d: any) => d.initialGap || 0)
+      .arcDashAnimateTime(3000)
+      .arcLabel((d: any) => `<div style="background: rgba(0,0,0,0.8); border: 1px solid #333; padding: 8px; color: white; font-family: monospace;">[航空走廊] ${d.name} (${d.code})</div>`);
+  }
+
+  private initCables(): void {
+    const validCables = UNDERSEA_CABLES.filter((c) => c.points && c.points.length > 1);
+
+    this.globe
+      .pathsData(this.layerStates.cables ? validCables : [])
+      .pathPoints((d: any) => d.points.map(([lng, lat]: [number, number]) => ({ lat, lng })))
+      .pathPointLat('lat')
+      .pathPointLng('lng')
+      .pathColor(() => '#5eead4')
+      .pathStroke(0.7)
+      .pathDashLength(0.25)
+      .pathDashGap(0.04)
+      .pathDashAnimateTime(6000)
+      .pathLabel((d: any) => `<div style="background: rgba(0,0,0,0.85); border: 1px solid #333; padding: 8px 12px; color: white; font-family: monospace; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.6);"><span style="color:#5eead4;font-weight:bold;">[海底光纜]</span> ${d.name}</div>`);
+  }
+
+  private async fetchEarthquakes(): Promise<void> {
+    try {
+      const res = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson');
+      const data = await res.json();
+      const quakes: EarthquakeItem[] = (data.features || []).map((f: any) => ({
+        id: f.id,
+        mag: f.properties.mag ?? 3.0,
+        place: f.properties.place || 'Unknown',
+        time: f.properties.time,
+        lat: f.geometry.coordinates[1],
+        lon: f.geometry.coordinates[0],
+        depth: f.geometry.coordinates[2],
+      }));
+      this.earthquakes = quakes.slice(0, 60);
+      this.updateVisibleData();
+    } catch (err) {
+      this.earthquakes = [
+        { id: 'q1', mag: 7.2, place: 'Hualien Offshore', time: Date.now(), lat: 23.85, lon: 121.65, depth: 15 },
+        { id: 'q2', mag: 6.8, place: 'Noto Peninsula', time: Date.now(), lat: 37.5, lon: 137.2, depth: 10 },
+      ];
+      this.updateVisibleData();
+    }
+  }
+
+  private updateVisibleData(): void {
+    if (!this.globe) return;
+    const points: any[] = [];
+
+    if (this.layerStates.cctv) {
+      CCTV_PRESETS.forEach((p) => points.push({ ...p, type: 'cctv' }));
     }
 
-    let badgeText = '';
-    let badgeClass = '';
-    let titleText = '';
-    let detailText = '';
-
-    if (userData.type === 'earthquake' && userData.quake) {
-      const q: EarthquakeItem = userData.quake;
-      const minAgo = Math.max(1, Math.floor((Date.now() - q.time) / 60000));
-      const timeStr = minAgo < 60 ? `${minAgo} 分鐘前` : `${Math.floor(minAgo / 60)} 小時前`;
-      badgeText = 'USGS 地震';
-      badgeClass = q.mag >= 6.0 ? 'badge-critical' : q.mag >= 4.5 ? 'badge-elevated' : 'badge-monitor';
-      titleText = `規模: M${q.mag.toFixed(1)} | 深度: ${q.depth.toFixed(0)}km | 震央: ${q.place} | 時間: ${timeStr}`;
-      detailText = `座標: ${q.lat.toFixed(2)}°, ${q.lon.toFixed(2)}° (點擊聚焦震央)`;
-    } else if (userData.type === 'cctv' && userData.point) {
-      const pt: CCTVPoint = userData.point;
-      badgeText = '即時監視攝影機';
-      badgeClass = 'badge-cctv';
-      titleText = `${pt.name}`;
-      detailText = `地點: ${pt.city}, ${pt.country} | 點擊連動下方播放矩陣`;
-    } else if (userData.type === 'cable') {
-      badgeText = '海底光纜 (Cables)';
-      badgeClass = 'badge-cable';
-      titleText = `${userData.name || '全球海底光纜'}`;
-      const len = userData.lengthKm ? `${userData.lengthKm.toLocaleString()} km` : '跨洋多節點';
-      const landing = userData.landingCity ? `據點: ${userData.landingCity}, ${userData.landingCountry}` : '國際海底高頻寬骨幹';
-      detailText = `長度: ${len} | ${landing}`;
-    } else if (userData.type === 'air_corridor' || userData.type === 'aircraft') {
-      badgeText = '國際航空 (Air Corridors)';
-      badgeClass = 'badge-air';
-      titleText = `航線代號: ${userData.code || 'AIR'} // ${userData.name}`;
-      detailText = `巡航高度: ${userData.altitude || 'FL380 (平流層 Stratosphere / 11,600m)'}`;
-    } else if (userData.type === 'maritime') {
-      badgeText = '海運航道 (Maritime)';
-      badgeClass = 'badge-maritime';
-      titleText = `${userData.name || '戰略通航航道'}`;
-      detailText = `類型: ${userData.route?.type || '戰略航運咽喉'}`;
-    } else if (userData.type === 'incident' && userData.incident) {
-      const inc: GeoIncident = userData.incident;
-      badgeText = '全球地緣事件';
-      badgeClass = inc.level === 'CRITICAL' ? 'badge-critical' : 'badge-elevated';
-      titleText = `事件: ${inc.title} / 地點: ${inc.location}`;
-      detailText = `情報層級: ${inc.level} | 座標: ${inc.lat.toFixed(2)}°, ${inc.lon.toFixed(2)}°`;
-    } else if (userData.type === 'news' && userData.item) {
-      const nw: GeoNewsItem = userData.item;
-      badgeText = '即時全球新聞';
-      badgeClass = 'badge-news';
-      titleText = `焦點: ${nw.headline}`;
-      detailText = `來源: ${nw.source} | 地點: ${nw.city} (${nw.time}) | 點擊定位`;
+    if (this.layerStates.earthquakes) {
+      this.earthquakes.forEach((q) => points.push({ ...q, type: 'earthquake' }));
+      this.globe
+        .ringsData(this.earthquakes)
+        .ringLat('lat')
+        .ringLng('lon')
+        .ringColor((d: any) => (d.mag >= 6.0 ? '#ef4444' : '#facc15'))
+        .ringMaxRadius(10)
+        .ringPropagationSpeed(2)
+        .ringRepeatPeriod(1000);
     } else {
-      this.hideTooltip();
-      return;
+      this.globe.ringsData([]);
     }
 
-    this.tooltipEl.innerHTML = `
-      <div class="hud-tooltip-header">
-        <span class="hud-tooltip-badge ${badgeClass}">[${badgeText}]</span>
-      </div>
-      <div class="hud-tooltip-title">${titleText}</div>
-      <div class="hud-tooltip-detail">${detailText}</div>
-    `;
+    this.globe.pointsData(points);
+    this.initAirArcs();
+    this.initCables();
+  }
 
-    const offset = 15;
-    let left = clientX + offset;
-    let top = clientY + offset;
-
-    const w = 380;
-    if (left + w > window.innerWidth) {
-      left = Math.max(10, clientX - w - offset);
+  public toggleLayer(key: string, visible?: boolean): boolean {
+    if (key in this.layerStates) {
+      const next = visible !== undefined ? visible : !(this.layerStates as any)[key];
+      (this.layerStates as any)[key] = next;
+      this.updateVisibleData();
+      return next;
     }
-    if (top + 90 > window.innerHeight) {
-      top = Math.max(10, clientY - 90 - offset);
-    }
-
-    this.tooltipEl.style.left = `${left}px`;
-    this.tooltipEl.style.top = `${top}px`;
-    this.tooltipEl.style.display = 'block';
-  }
-
-  private hideTooltip(): void {
-    if (this.tooltipEl) {
-      this.tooltipEl.style.display = 'none';
-    }
-  }
-
-  public focusCoordinates(lat: number, lon: number, distance = 160): void {
-    const targetVector = latLonToVector3(lat, lon, distance);
-    const startPos = this.camera.position.clone();
-    const duration = 1200; // ms
-    const startTime = performance.now();
-
-    const animateCamera = (now: number) => {
-      const elapsed = now - startTime;
-      const t = Math.min(1, elapsed / duration);
-      // Smooth easeInOutCubic
-      const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-
-      this.camera.position.lerpVectors(startPos, targetVector, ease);
-      this.controls.update();
-
-      if (t < 1) {
-        requestAnimationFrame(animateCamera);
-      }
-    };
-
-    requestAnimationFrame(animateCamera);
-  }
-
-  public toggleLayer(layerKey: keyof GlobeLayerState, enabled?: boolean): boolean {
-    const nextState = enabled !== undefined ? enabled : !this.layerStates[layerKey];
-    this.layerStates[layerKey] = nextState;
-
-    switch (layerKey) {
-      case 'cctv':
-        this.cctvLayer.setVisible(nextState);
-        break;
-      case 'live_news':
-        this.newsLayer.setVisible(nextState);
-        break;
-      case 'earthquakes':
-        this.earthquakeLayer.setVisible(nextState);
-        break;
-      case 'global_incidents':
-        this.incidentsLayer.setVisible(nextState);
-        break;
-      case 'cables':
-        this.cablesLayer.setVisible(nextState);
-        break;
-      case 'maritime':
-        this.maritimeLayer.setVisible(nextState);
-        break;
-      case 'sdk_air':
-        this.airLayer.setVisible(nextState);
-        break;
-      case 'day_night':
-        // If day_night is false, fixed sun position directly behind camera for uniform daylight
-        break;
-    }
-
-    return nextState;
-  }
-
-  public getLayerStates(): GlobeLayerState {
-    return { ...this.layerStates };
-  }
-
-  private onWindowResize(): void {
-    if (!this.container) return;
-    const width = this.container.clientWidth;
-    const height = this.container.clientHeight;
-
-    this.camera.aspect = width / (height || 1);
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(width, height);
-  }
-
-  private start(): void {
-    if (this.isAnimating) return;
-    this.isAnimating = true;
-
-    const renderLoop = () => {
-      if (!this.isAnimating) return;
-      requestAnimationFrame(renderLoop);
-
-      const delta = this.clock.getDelta();
-      const elapsed = this.clock.getElapsedTime();
-
-      // Controls
-      this.controls.update();
-
-      // Astronomical Solar Vector update (UTC time)
-      if (this.earthMaterial && this.earthMaterial.uniforms) {
-        let sunVector: THREE.Vector3;
-        if (this.layerStates.day_night) {
-          sunVector = getSunDirectionVector(new Date());
-        } else {
-          // Daylight uniform light facing camera
-          sunVector = this.camera.position.clone().normalize();
-        }
-
-        this.earthMaterial.uniforms.uSunDirection.value.copy(sunVector);
-        this.earthMaterial.uniforms.uTime.value = elapsed;
-
-        if (this.atmosphereMaterial && this.atmosphereMaterial.uniforms) {
-          this.atmosphereMaterial.uniforms.uSunDirection.value.copy(sunVector);
-        }
-
-        if (this.cloudsMaterial && this.cloudsMaterial.uniforms) {
-          this.cloudsMaterial.uniforms.uSunDirection.value.copy(sunVector);
-        }
-      }
-
-      // Clouds rotation (slightly faster than earth auto-rotation)
-      if (this.cloudsMesh) {
-        this.cloudsMesh.rotation.y += delta * 0.015;
-      }
-
-      // Layer animations
-      if (this.layerStates.cables) this.cablesLayer.update(delta);
-      if (this.layerStates.earthquakes) this.earthquakeLayer.update(delta);
-      if (this.layerStates.cctv) this.cctvLayer.update(delta);
-      if (this.layerStates.live_news) this.newsLayer.update(delta);
-      if (this.layerStates.global_incidents) this.incidentsLayer.update(delta);
-      if (this.layerStates.maritime) this.maritimeLayer.update(delta);
-      if (this.layerStates.sdk_air) this.airLayer.update(delta);
-
-      this.renderer.render(this.scene, this.camera);
-    };
-
-    renderLoop();
+    return false;
   }
 
   public setAutoRotate(enabled: boolean): void {
-    this.controls.autoRotate = enabled;
+    if (this.globe && this.globe.controls()) {
+      this.globe.controls().autoRotate = enabled;
+    }
   }
 
+  public focusCoordinates(lat: number, lon: number, distance = 0.5): void {
+    if (this.globe) {
+      this.globe.pointOfView({ lat, lng: lon, altitude: distance }, 1000);
+    }
+  }
+
+  private onResize = (): void => {
+    if (this.globe && this.container) {
+      this.globe.width(this.container.clientWidth).height(this.container.clientHeight || 500);
+    }
+  };
+
   public destroy(): void {
-    this.isAnimating = false;
-    window.removeEventListener('resize', this.onWindowResize.bind(this));
-    if (this.tooltipEl && this.tooltipEl.parentElement) {
-      this.tooltipEl.parentElement.removeChild(this.tooltipEl);
-    }
-    this.renderer.dispose();
-    if (this.renderer.domElement.parentElement) {
-      this.renderer.domElement.parentElement.removeChild(this.renderer.domElement);
-    }
   }
 }

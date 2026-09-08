@@ -159,33 +159,42 @@ class TerraMatrixApp {
       }
     });
 
-    // Handle CCTV Click: Focus camera & add/switch stream in Matrix!
+    // Handle CCTV Click: Auto-add to matrix and show tactical notification
     this.globeScene.onSelectCctv = (pt: CCTVPoint) => {
+      this.streamMatrix.addChannel({
+        id: pt.id,
+        name: pt.name,
+        videoId: pt.videoId,
+        city: pt.city,
+        country: pt.country,
+      });
+
       this.showInfoCard({
-        badge: 'CCTV FEED',
+        badge: 'CCTV FEED ADDED',
         badgeClass: 'MONITOR',
         title: `${pt.name} (${pt.city}, ${pt.country})`,
-        content: `Coordinates: ${pt.lat.toFixed(4)}°N, ${pt.lon.toFixed(4)}°E<br/>Target Stream: ${pt.videoId}`,
-        actionLabel: 'OPEN IN MATRIX',
-        onAction: () => {
-          this.streamMatrix.addChannel({
-            id: pt.id,
-            name: pt.name,
-            videoId: pt.videoId,
-            city: pt.city,
-            country: pt.country,
-          });
-        }
+        content: `Coordinates: ${pt.lat.toFixed(4)}°N, ${pt.lon.toFixed(4)}°E<br/>Target Stream: ${pt.videoId}<br/><span style="color:var(--accent-emerald);">已自動加入下方播放矩陣</span>`,
       });
     };
 
     // Handle Earthquake Click
     this.globeScene.onSelectEarthquake = (q: EarthquakeItem) => {
+      const quakeTime = new Date(q.time).toLocaleString('en-US', {
+        timeZone: 'Asia/Taipei',
+        hour12: false,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }) + ' TPE';
+
       this.showInfoCard({
         badge: `MAG ${q.mag.toFixed(1)} SEISMIC`,
         badgeClass: q.mag >= 6.0 ? 'CRITICAL' : 'ELEVATED',
         title: q.place,
-        content: `Magnitude: Richter ${q.mag.toFixed(1)}<br/>Depth: ${q.depth} km<br/>Time: ${new Date(q.time).toUTCString()}`,
+        content: `Magnitude: Richter ${q.mag.toFixed(1)}<br/>Depth: ${q.depth} km<br/>Time: ${quakeTime}`,
       });
     };
 
@@ -258,25 +267,13 @@ class TerraMatrixApp {
     const clockEl = document.getElementById('tpe-clock');
     const update = () => {
       if (clockEl) {
-        const now = new Date();
-        const formatter = new Intl.DateTimeFormat('en-CA', {
-          timeZone: 'Asia/Taipei',
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-          hour12: false,
-        });
-        const parts = formatter.formatToParts(now);
-        const y = parts.find((p) => p.type === 'year')?.value;
-        const m = parts.find((p) => p.type === 'month')?.value;
-        const d = parts.find((p) => p.type === 'day')?.value;
-        const hh = parts.find((p) => p.type === 'hour')?.value;
-        const mm = parts.find((p) => p.type === 'minute')?.value;
-        const ss = parts.find((p) => p.type === 'second')?.value;
-        clockEl.textContent = `${y}-${m}-${d} ${hh}:${mm}:${ss} TPE`;
+        const tpeTime = new Date().toLocaleString('en-US', { 
+          timeZone: 'Asia/Taipei', 
+          hour12: false, 
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit'
+        }) + ' TPE';
+        clockEl.textContent = tpeTime;
       }
     };
     update();
