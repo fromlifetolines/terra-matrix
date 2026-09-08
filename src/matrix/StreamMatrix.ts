@@ -133,7 +133,15 @@ export class StreamMatrix {
   }
 
   public addChannel(channel: MatrixChannel): void {
-    const exists = this.channels.some((c) => c.videoId === channel.videoId);
+    if (channel.feed_url) {
+      channel.feed_url = resolveFeedUrl(channel.feed_url);
+    }
+    const exists = this.channels.some((c) => {
+      if (channel.id && c.id === channel.id) return true;
+      if (channel.videoId && c.videoId && c.videoId === channel.videoId) return true;
+      if (channel.feed_url && c.feed_url && c.feed_url === channel.feed_url) return true;
+      return false;
+    });
     if (!exists) {
       this.channels.push(channel);
       this.saveState();
@@ -370,7 +378,7 @@ export class StreamMatrix {
                           ></iframe>`
                         : ch.feed_url
                         ? `<img
-                            src="${ch.feed_url}"
+                            src="${resolveFeedUrl(ch.feed_url)}"
                             alt="${ch.name}"
                             referrerpolicy="no-referrer"
                             style="width: 100%; height: 100%; object-fit: cover;"
@@ -531,4 +539,16 @@ export class StreamMatrix {
       });
     }
   }
+}
+
+export function resolveFeedUrl(url?: string): string {
+  if (!url) return '';
+  let u = url.trim();
+  if (u.startsWith('/api/')) {
+    return 'https://osirisai.live' + u;
+  }
+  if ((u.startsWith('http://') || u.includes('thb.gov.tw') || u.includes('skylinewebcams.com') || u.includes('etraffic.dgt.es') || u.includes('inmoves.nl')) && !u.includes('osirisai.live/api/cctv/proxy')) {
+    return `https://osirisai.live/api/cctv/proxy?url=${encodeURIComponent(u)}`;
+  }
+  return u;
 }

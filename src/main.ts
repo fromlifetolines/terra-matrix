@@ -59,8 +59,8 @@ class TerraMatrixApp {
             <span class="metric-val" id="header-quake-count">USGS LIVE</span>
           </div>
           <div class="header-metric">
-            <span>CABLES:</span>
-            <span class="metric-val">420+ GLOBAL</span>
+            <span>FLIGHTS:</span>
+            <span class="metric-val" id="header-flights-count" style="color: #38bdf8;">7,000+ RADAR</span>
           </div>
           <div class="header-metric">
             <span>INTEL FEEDS:</span>
@@ -94,17 +94,13 @@ class TerraMatrixApp {
                 <span style="font-family: var(--font-mono); font-size: 9px; color: var(--accent-emerald);">6 ACTIVE</span>
               </div>
               <div class="pill-layers-list">
-                <label class="layer-toggle-item" title="Aviation international skyways & flight corridors">
+                <label class="layer-toggle-item" title="Global live flights & ADS-B radar tracking">
                   <input type="checkbox" id="layer-sdk_air" checked />
-                  <span>✈️ 國際航空 (Air Corridors)</span>
+                  <span>✈️ 即時航班 (Live Flights)</span>
                 </label>
                 <label class="layer-toggle-item" title="USGS real-time earthquake ripples">
                   <input type="checkbox" id="layer-earthquakes" checked />
                   <span>🌋 即時地震 (Earthquakes)</span>
-                </label>
-                <label class="layer-toggle-item" title="Global undersea fiber-optic cables">
-                  <input type="checkbox" id="layer-cables" checked />
-                  <span>🌊 海底光纜 (Cables)</span>
                 </label>
                 <label class="layer-toggle-item" title="Global live cameras and webcams">
                   <input type="checkbox" id="layer-cctv" checked />
@@ -149,7 +145,6 @@ class TerraMatrixApp {
       'earthquakes',
       'global_incidents',
       'day_night',
-      'cables',
       'maritime',
       'sdk_air',
     ] as const;
@@ -243,6 +238,35 @@ class TerraMatrixApp {
         content: `${n.headline || '24/7 Global Satellite News Broadcast'}<br/><span style="color: var(--accent-emerald);">● 已同步加入下方 Swiss Grid 播放矩陣</span>`,
         actionLabel: n.url ? '↗️ OPEN BROADCAST' : undefined,
         onAction: n.url ? () => window.open(n.url, '_blank') : undefined,
+      });
+    };
+
+    // Handle Real Live Flight Click: Display Military / Commercial Dossier
+    this.globeScene.onSelectFlight = (fl: any) => {
+      const isMil = fl.category === 'military';
+      const altFt = Math.round((fl.alt || 0) * 3.28084);
+      const spdKmh = Math.round((fl.speed_knots || 0) * 1.852);
+
+      this.showInfoCard({
+        badge: isMil ? 'AIR DEFENSE INTERCEPT // MILITARY' : 'CIVIL AVIATION RADAR // ADS-B',
+        badgeClass: isMil ? 'CRITICAL' : 'MONITOR',
+        title: `FLIGHT ${fl.callsign || 'UNKNOWN'} // ${fl.model || 'AIRCRAFT'}`,
+        content: `
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px; margin-bottom: 8px;">
+            <div><strong>Callsign:</strong> ${fl.callsign || 'N/A'}</div>
+            <div><strong>Category:</strong> ${String(fl.category || 'flight').toUpperCase()}</div>
+            <div><strong>Altitude:</strong> ${fl.alt || 0} m (${altFt.toLocaleString()} ft)</div>
+            <div><strong>Speed:</strong> ${fl.speed_knots || 0} kts (${spdKmh} km/h)</div>
+            <div><strong>Heading:</strong> ${fl.heading || 0}°</div>
+            <div><strong>Squawk:</strong> ${fl.squawk || 'AUTO'}</div>
+            <div><strong>ICAO24:</strong> ${fl.icao24 || 'N/A'}</div>
+            <div><strong>Tail Reg:</strong> ${fl.registration || 'N/A'}</div>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 6px;">
+            <a href="https://www.flightradar24.com/${encodeURIComponent(fl.callsign)}" target="_blank" rel="noopener noreferrer" style="color:#38bdf8; text-decoration:none; font-size:10px; border:1px solid rgba(56,189,248,0.4); padding:3px 8px; border-radius:3px; background:rgba(56,189,248,0.1);">FLIGHTRADAR24 ↗</a>
+            <a href="https://www.radarbox.com/data/flights/${encodeURIComponent(fl.callsign)}" target="_blank" rel="noopener noreferrer" style="color:#4ade80; text-decoration:none; font-size:10px; border:1px solid rgba(74,222,128,0.4); padding:3px 8px; border-radius:3px; background:rgba(74,222,128,0.1);">RADARBOX ↗</a>
+          </div>
+        `,
       });
     };
   }

@@ -9,7 +9,6 @@ export interface GlobeLayerState {
   earthquakes: boolean;
   global_incidents: boolean;
   day_night: boolean;
-  cables: boolean;
   maritime: boolean;
   sdk_air: boolean;
 }
@@ -26,9 +25,19 @@ export class GlobeScene {
   public onSelectEarthquake?: (quake: EarthquakeItem) => void;
   public onSelectIncident?: (incident: any) => void;
   public onSelectNews?: (news: any) => void;
+  public onSelectFlight?: (flight: any) => void;
 
   private currentStyle: 'dark' | 'sat' = 'dark';
   private currentProjection: 'globe' | 'mercator' = 'globe';
+
+  private flightAnimationTimer?: number;
+  private flightFetchTimer?: number;
+  private flightData: {
+    commercial: any[];
+    private: any[];
+    jets: any[];
+    military: any[];
+  } = { commercial: [], private: [], jets: [], military: [] };
 
   private layerStates: GlobeLayerState = {
     cctv: true,
@@ -36,7 +45,6 @@ export class GlobeScene {
     earthquakes: true,
     global_incidents: true,
     day_night: true,
-    cables: true,
     maritime: true,
     sdk_air: true,
   };
@@ -70,13 +78,12 @@ export class GlobeScene {
     this.map.on('load', () => {
       this.setupGlobeAtmosphere();
       this.initSatelliteLayer();
-      this.initSubmarineCablesLayer();
       this.initGlobalCctvLayer();
       this.initMaritimeLayer();
       this.initLiveNewsLayer();
       this.initConflictsLayer();
       this.initEarthquakeLayer();
-      this.initAirCorridorsLayer();
+      this.initRealFlightsLayer();
       this.initTacticalControls();
       this.initTelemetryHUD();
 
@@ -124,45 +131,6 @@ export class GlobeScene {
         layout: { visibility: 'none' },
         paint: { 'raster-opacity': 0.88 },
       });
-    }
-  }
-
-  private async initSubmarineCablesLayer(): Promise<void> {
-    const baseUrl = import.meta.env.BASE_URL || '/';
-    try {
-      this.map.addSource('cables', {
-        type: 'geojson',
-        data: `${baseUrl}data/submarine-cables.json`,
-      });
-
-      this.map.addLayer({
-        id: 'cables-layer',
-        type: 'line',
-        source: 'cables',
-        layout: {
-          'line-join': 'round',
-          'line-cap': 'round',
-        },
-        paint: {
-          'line-color': '#5eead4',
-          'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.8, 6, 1.8, 12, 2.5],
-          'line-opacity': 0.75,
-        },
-      });
-
-      this.map.on('click', 'cables-layer', (e) => {
-        const feat = e.features?.[0];
-        if (feat?.properties) {
-          this.onSelectIncident?.({
-            title: `SUBSEA CABLE // ${feat.properties.name || 'Fiber Optic Route'}`,
-            location: `Global Oceanic Trunk (${Math.round(feat.properties.length_km || 4000)} km)`,
-            summary: `High-bandwidth trans-oceanic fiber optic infrastructure. Critical telecommunication node.`,
-            level: 'MONITOR',
-          });
-        }
-      });
-    } catch (e) {
-      console.warn('[GlobeScene] Submarine cables load failed:', e);
     }
   }
 
@@ -582,40 +550,241 @@ export class GlobeScene {
     }
   }
 
-  private initAirCorridorsLayer(): void {
-    const airArcs = [
-      { id: 'tpe-lax', name: '台北 - 洛杉磯 跨太平洋航空走廊', coords: [[121.23, 25.07], [140.0, 35.0], [-160.0, 45.0], [-135.0, 40.0], [-118.40, 33.94]] },
-      { id: 'tpe-nrt', name: '台北 - 東京成田 國際航線', coords: [[121.23, 25.07], [128.0, 30.0], [140.39, 35.77]] },
-      { id: 'tpe-sin', name: '台北 - 新加坡 樟宜航線', coords: [[121.23, 25.07], [115.0, 15.0], [103.99, 1.36]] },
-      { id: 'lhr-jfk', name: '北大西洋航路 NAT-Track', coords: [[-0.45, 51.47], [-30.0, 56.0], [-55.0, 48.0], [-73.77, 40.64]] },
-      { id: 'dxb-syd', name: '中東 - 澳洲遠程空運走廊', coords: [[55.36, 25.25], [80.0, 10.0], [115.0, -15.0], [151.17, -33.93]] },
+  private createPlaneIcon(id: string, color: string, size: number = 24): void {
+    if (this.map.hasImage(id)) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d')!;
+    const cx = size / 2, cy = size / 2;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - size * 0.4);
+    ctx.lineTo(cx - size * 0.12, cy + size * 0.1);
+    ctx.lineTo(cx - size * 0.4, cy + size * 0.2);
+    ctx.lineTo(cx - size * 0.4, cy + size * 0.3);
+    ctx.lineTo(cx - size * 0.12, cy + size * 0.15);
+    ctx.lineTo(cx, cy + size * 0.35);
+    ctx.lineTo(cx + size * 0.12, cy + size * 0.15);
+    ctx.lineTo(cx + size * 0.4, cy + size * 0.3);
+    ctx.lineTo(cx + size * 0.4, cy + size * 0.2);
+    ctx.lineTo(cx + size * 0.12, cy + size * 0.1);
+    ctx.closePath();
+    ctx.fill();
+    this.map.addImage(id, {
+      width: size,
+      height: size,
+      data: new Uint8Array(ctx.getImageData(0, 0, size, size).data),
+    });
+  }
+
+  private async initRealFlightsLayer(): Promise<void> {
+    const baseUrl = import.meta.env.BASE_URL || '/';
+
+    // Register sharp silhouette aircraft icons matching Osiris color palette
+    this.createPlaneIcon('plane-cyan', '#38bdf8', 24);   // Commercial airliner (Cyan)
+    this.createPlaneIcon('plane-green', '#4ade80', 22);  // Private aviation (Green)
+    this.createPlaneIcon('plane-pink', '#f472b6', 22);   // Executive jets (Pink)
+    this.createPlaneIcon('plane-red', '#ef4444', 26);    // Military air defense (Red)
+
+    // Setup GeoJSON sources for each aviation group
+    const sources = ['flights-commercial', 'flights-private', 'flights-jets', 'flights-military'];
+    sources.forEach((s) => {
+      if (!this.map.getSource(s)) {
+        this.map.addSource(s, {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+        });
+      }
+    });
+
+    const flightConfigs = [
+      { id: 'fl-commercial', src: 'flights-commercial', icon: 'plane-cyan', scale: 0.8 },
+      { id: 'fl-private', src: 'flights-private', icon: 'plane-green', scale: 0.75 },
+      { id: 'fl-jets', src: 'flights-jets', icon: 'plane-pink', scale: 0.75 },
+      { id: 'fl-military', src: 'flights-military', icon: 'plane-red', scale: 0.9 },
     ];
 
-    const features = airArcs.map((a) => ({
-      type: 'Feature' as const,
-      geometry: {
-        type: 'LineString' as const,
-        coordinates: a.coords,
-      },
-      properties: { id: a.id, name: a.name },
-    }));
+    flightConfigs.forEach((cfg) => {
+      this.map.addLayer({
+        id: cfg.id,
+        type: 'symbol',
+        source: cfg.src,
+        layout: {
+          'icon-image': cfg.icon,
+          'icon-size': ['interpolate', ['linear'], ['zoom'], 1, 0.45 * cfg.scale, 5, 0.75 * cfg.scale, 10, 1.15 * cfg.scale],
+          'icon-rotate': ['get', 'heading'],
+          'icon-rotation-alignment': 'map',
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+        },
+        paint: {
+          'icon-opacity': 0.9,
+        },
+      });
 
-    this.map.addSource('air-corridors', {
-      type: 'geojson',
-      data: { type: 'FeatureCollection', features },
+      this.map.on('click', cfg.id, (e) => {
+        const feat = e.features?.[0];
+        if (feat && feat.properties) {
+          this.onSelectFlight?.(feat.properties);
+        }
+      });
+
+      this.map.on('mouseenter', cfg.id, () => {
+        this.map.getCanvas().style.cursor = 'pointer';
+      });
+      this.map.on('mouseleave', cfg.id, () => {
+        this.map.getCanvas().style.cursor = '';
+      });
     });
 
+    // Flight callsign labels at zoom >= 4.5
     this.map.addLayer({
-      id: 'air-layer',
-      type: 'line',
-      source: 'air-corridors',
+      id: 'fl-labels',
+      type: 'symbol',
+      source: 'flights-commercial',
+      minzoom: 4.5,
+      layout: {
+        'text-field': ['get', 'callsign'],
+        'text-size': 9,
+        'text-offset': [0, 1.4],
+        'text-allow-overlap': false,
+      },
       paint: {
-        'line-color': '#38bdf8',
-        'line-width': 1.6,
-        'line-dasharray': [3, 2],
-        'line-opacity': 0.8,
+        'text-color': '#38bdf8',
+        'text-halo-color': '#000000',
+        'text-halo-width': 1.2,
       },
     });
+
+    // Initial fetch of real flights
+    await this.fetchFlightsData(baseUrl);
+
+    // Setup real-time dead reckoning animation loop every 1.5s
+    this.flightAnimationTimer = window.setInterval(() => {
+      this.updateFlightDeadReckoning();
+    }, 1500);
+
+    // Periodic telemetry sync every 60s
+    this.flightFetchTimer = window.setInterval(() => {
+      this.fetchFlightsData(baseUrl);
+    }, 60000);
+  }
+
+  private async fetchFlightsData(baseUrl: string): Promise<void> {
+    try {
+      let data: any = null;
+      try {
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch('https://osirisai.live/api/flights', { signal: controller.signal });
+        clearTimeout(tid);
+        if (res.ok) {
+          data = await res.json();
+        }
+      } catch (e) {
+        console.info('[GlobeScene] Live flights remote fetch fallback to bundled cache:', e);
+      }
+
+      if (!data || (!data.commercial_flights && !data.flights)) {
+        const localRes = await fetch(`${baseUrl}data/flights.json`);
+        data = await localRes.json();
+      }
+
+      const commercial = data.commercial_flights || data.flights || [];
+      const privateFl = data.private_flights || [];
+      const jets = data.private_jets || [];
+      const military = data.military_flights || [];
+
+      this.flightData = {
+        commercial: commercial.map((f: any) => ({ ...f, category: 'commercial' })),
+        private: privateFl.map((f: any) => ({ ...f, category: 'private' })),
+        jets: jets.map((f: any) => ({ ...f, category: 'jets' })),
+        military: military.map((f: any) => ({ ...f, category: 'military' })),
+      };
+
+      this.pushFlightFeaturesToMap();
+
+      const total =
+        this.flightData.commercial.length +
+        this.flightData.private.length +
+        this.flightData.jets.length +
+        this.flightData.military.length;
+
+      const countEl = document.getElementById('header-flights-count');
+      if (countEl) {
+        countEl.textContent = `${total.toLocaleString()} RADAR`;
+      }
+    } catch (e) {
+      console.warn('[GlobeScene] Failed to load flights data:', e);
+    }
+  }
+
+  private pushFlightFeaturesToMap(): void {
+    if (!this.map || this.isDestroyed) return;
+
+    const toGeoJson = (arr: any[]) => ({
+      type: 'FeatureCollection' as const,
+      features: arr.map((f: any) => ({
+        type: 'Feature' as const,
+        geometry: {
+          type: 'Point' as const,
+          coordinates: [f.lng, f.lat],
+        },
+        properties: {
+          callsign: f.callsign || 'UNKNOWN',
+          heading: f.heading || 0,
+          alt: f.alt || 0,
+          speed_knots: f.speed_knots || 0,
+          model: f.model || 'Standard',
+          registration: f.registration || 'N/A',
+          icao24: f.icao24 || 'N/A',
+          squawk: f.squawk || '',
+          airline_code: f.airline_code || '',
+          category: f.category || 'commercial',
+        },
+      })),
+    });
+
+    const cSrc = this.map.getSource('flights-commercial') as any;
+    if (cSrc) cSrc.setData(toGeoJson(this.flightData.commercial));
+
+    const pSrc = this.map.getSource('flights-private') as any;
+    if (pSrc) pSrc.setData(toGeoJson(this.flightData.private));
+
+    const jSrc = this.map.getSource('flights-jets') as any;
+    if (jSrc) jSrc.setData(toGeoJson(this.flightData.jets));
+
+    const mSrc = this.map.getSource('flights-military') as any;
+    if (mSrc) mSrc.setData(toGeoJson(this.flightData.military));
+  }
+
+  private updateFlightDeadReckoning(): void {
+    if (!this.map || this.isDestroyed || !this.layerStates.sdk_air) return;
+    const dt = 1.5; // seconds elapsed
+
+    const moveGroup = (list: any[]) => {
+      for (const f of list) {
+        const speedKnots = f.speed_knots || 0;
+        if (speedKnots > 20 && !f.grounded) {
+          const headingRad = ((f.heading || 0) * Math.PI) / 180;
+          const speedMps = speedKnots * 0.514444;
+          const distM = speedMps * dt;
+          const latRad = ((f.lat || 0) * Math.PI) / 180;
+          const dLat = (distM * Math.cos(headingRad)) / 111320;
+          const dLng = (distM * Math.sin(headingRad)) / (111320 * Math.max(0.1, Math.cos(latRad)));
+          f.lat += dLat;
+          f.lng += dLng;
+        }
+      }
+    };
+
+    moveGroup(this.flightData.commercial);
+    moveGroup(this.flightData.private);
+    moveGroup(this.flightData.jets);
+    moveGroup(this.flightData.military);
+
+    this.pushFlightFeaturesToMap();
   }
 
   private initTacticalControls(): void {
@@ -746,10 +915,11 @@ export class GlobeScene {
         if (this.map.getLayer('eq-circles')) this.map.setLayoutProperty('eq-circles', 'visibility', vis);
         if (this.map.getLayer('eq-glow')) this.map.setLayoutProperty('eq-glow', 'visibility', vis);
         if (this.map.getLayer('eq-label')) this.map.setLayoutProperty('eq-label', 'visibility', vis);
-      } else if (layerKey === 'cables') {
-        if (this.map.getLayer('cables-layer')) this.map.setLayoutProperty('cables-layer', 'visibility', vis);
       } else if (layerKey === 'sdk_air') {
-        if (this.map.getLayer('air-layer')) this.map.setLayoutProperty('air-layer', 'visibility', vis);
+        const flightLayers = ['fl-commercial', 'fl-private', 'fl-jets', 'fl-military', 'fl-labels'];
+        flightLayers.forEach((id) => {
+          if (this.map.getLayer(id)) this.map.setLayoutProperty(id, 'visibility', vis);
+        });
       } else if (layerKey === 'maritime') {
         if (this.map.getLayer('maritime-ports-layer')) this.map.setLayoutProperty('maritime-ports-layer', 'visibility', vis);
         if (this.map.getLayer('maritime-chokepoint-glow')) this.map.setLayoutProperty('maritime-chokepoint-glow', 'visibility', vis);
@@ -777,6 +947,8 @@ export class GlobeScene {
   public destroy(): void {
     this.isDestroyed = true;
     this.setAutoRotate(false);
+    if (this.flightAnimationTimer) clearInterval(this.flightAnimationTimer);
+    if (this.flightFetchTimer) clearInterval(this.flightFetchTimer);
     this.previewManager?.destroy();
     window.removeEventListener('resize', this.onResize);
     this.map.remove();

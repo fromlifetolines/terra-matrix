@@ -20,6 +20,7 @@ export class CctvPreviewsManager {
   private tileElements: Map<string, HTMLElement> = new Map();
   private onSelectCamera?: (cam: CctvCamera) => void;
   private isDestroyed = false;
+  private refreshIntervals: Map<string, number> = new Map();
 
   constructor(map: MlMap, parentElement: HTMLElement, onSelect?: (cam: CctvCamera) => void) {
     this.map = map;
@@ -138,6 +139,7 @@ export class CctvPreviewsManager {
   private renderTiles(): void {
     this.container.innerHTML = '';
     this.tileElements.clear();
+    this.clearIntervals();
 
     for (const cam of this.currentCams) {
       const tileWrapper = document.createElement('div');
@@ -145,7 +147,6 @@ export class CctvPreviewsManager {
       tileWrapper.style.width = `${GEOM.width}px`;
 
       // Live status dot
-      const isLive = true;
       const statusHtml = `
         <div class="cctv-tile-header">
           <div class="cctv-live-tag">
@@ -160,26 +161,17 @@ export class CctvPreviewsManager {
       `;
 
       // Preview Frame
-      let videoId = cam.videoId;
-      if (!videoId && cam.stream_url) {
-        const m = cam.stream_url.match(/(?:embed\/|v=|vi\/|youtu\.be\/|\/v\/)([a-zA-Z0-9_-]{11})/);
-        if (m) videoId = m[1];
-      }
-      let mediaSrc = '';
-      if (videoId) {
-        mediaSrc = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-      } else if (cam.feed_url) {
-        mediaSrc = cam.feed_url;
-      }
+      const mediaSrc = resolveMediaUrl(cam);
+      const isSnapshot = mediaSrc && !mediaSrc.includes('img.youtube.com');
 
       const imageHtml = `
         <div class="cctv-tile-media" style="height: ${GEOM.imageHeight}px;">
           ${
             mediaSrc
-              ? `<img src="${mediaSrc}" alt="${cam.name}" referrerpolicy="no-referrer" class="cctv-tile-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />`
+              ? `<img src="${mediaSrc}" alt="${cam.name}" referrerpolicy="no-referrer" class="cctv-tile-img" id="cctv-img-${cam.id}" />`
               : ''
           }
-          <div class="cctv-tile-fallback" style="${mediaSrc ? 'display:none;' : 'display:flex;'}">
+          <div class="cctv-tile-fallback" id="cctv-fb-${cam.id}" style="${mediaSrc ? 'display:none;' : 'display:flex;'}">
             <div class="cctv-scanline-sweep"></div>
             <div class="cctv-fallback-radar"></div>
             <span class="cctv-fallback-text">FEED ACTIVE</span>
@@ -210,6 +202,37 @@ export class CctvPreviewsManager {
         ${stemHtml}
       `;
 
+      // Setup image error and auto-refresh handlers
+      const imgEl = tileWrapper.querySelector<HTMLImageElement>(`#cctv-img-${cam.id}`);
+      const fbEl = tileWrapper.querySelector<HTMLElement>(`#cctv-fb-${cam.id}`);
+      if (imgEl && fbEl) {
+        let retried = false;
+        imgEl.onerror = () => {
+          if (!retried && isSnapshot) {
+            retried = true;
+            setTimeout(() => {
+              imgEl.src = freshen(mediaSrc);
+            }, 2500);
+          } else {
+            imgEl.style.display = 'none';
+            fbEl.style.display = 'flex';
+          }
+        };
+        imgEl.onload = () => {
+          imgEl.style.display = 'block';
+          fbEl.style.display = 'none';
+        };
+
+        // If snapshot, auto-refresh every 15s (staggered)
+        if (isSnapshot) {
+          const intervalMs = 15000 + Math.random() * 4000;
+          const timer = window.setInterval(() => {
+            imgEl.src = freshen(mediaSrc);
+          }, intervalMs);
+          this.refreshIntervals.set(cam.id, timer);
+        }
+      }
+
       tileWrapper.addEventListener('click', (e) => {
         e.stopPropagation();
         this.onSelectCamera?.(cam);
@@ -238,7 +261,15 @@ export class CctvPreviewsManager {
     }
   }
 
+  private clearIntervals(): void {
+    for (const timer of this.refreshIntervals.values()) {
+      clearInterval(timer);
+    }
+    this.refreshIntervals.clear();
+  }
+
   private clearTiles(): void {
+    this.clearIntervals();
     this.container.innerHTML = '';
     this.tileElements.clear();
     this.currentCams = [];
@@ -249,4 +280,32 @@ export class CctvPreviewsManager {
     this.clearTiles();
     this.container.remove();
   }
+}
+
+export function resolveMediaUrl(cam: { feed_url?: string; stream_url?: string; videoId?: string }): string {
+  let videoId = cam.videoId;
+  if (!videoId && cam.stream_url) {
+    const m = cam.stream_url.match(/(?:embed\/|v=|vi\/|youtu\.be\/|\/v\/)([a-zA-Z0-9_-]{11})/);
+    if (m) videoId = m[1];
+  }
+  if (videoId) {
+    return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+  }
+  const rawUrl = cam.feed_url?.trim() || cam.stream_url?.trim() || '';
+  if (!rawUrl) return '';
+
+  if (rawUrl.startsWith('/api/')) {
+    return 'https://osirisai.live' + rawUrl;
+  }
+  if (rawUrl.startsWith('http://') || rawUrl.includes('thb.gov.tw') || rawUrl.includes('skylinewebcams.com') || rawUrl.includes('etraffic.dgt.es') || rawUrl.includes('inmoves.nl')) {
+    if (!rawUrl.includes('osirisai.live/api/cctv/proxy')) {
+      return `https://osirisai.live/api/cctv/proxy?url=${encodeURIComponent(rawUrl)}`;
+    }
+  }
+  return rawUrl;
+}
+
+export function freshen(url: string): string {
+  const ts = Date.now();
+  return url.includes('?') ? `${url}&_t=${ts}` : `${url}?_t=${ts}`;
 }
