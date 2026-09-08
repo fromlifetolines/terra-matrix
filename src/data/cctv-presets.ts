@@ -31,6 +31,46 @@ export const CCTV_PRESETS: CCTVPoint[] = [
     category: 'news'
   },
   {
+    id: 'ctv-news',
+    name: '中視新聞 CTV News Live 24H',
+    city: 'Taipei',
+    country: 'Taiwan',
+    lat: 25.056,
+    lon: 121.594,
+    videoId: 'bgkM3-83GvM',
+    category: 'news'
+  },
+  {
+    id: 'tokyo-shibuya',
+    name: '東京澀谷 Tokyo Shibuya Crossing 4K Live',
+    city: 'Tokyo',
+    country: 'Japan',
+    lat: 35.6595,
+    lon: 139.7004,
+    videoId: '8H3nRCFVR6Y',
+    category: 'cctv'
+  },
+  {
+    id: 'alishan-live',
+    name: '阿里山二延平步道 4K 即時影像 Alishan 4K',
+    city: 'Chiayi',
+    country: 'Taiwan',
+    lat: 23.511,
+    lon: 120.704,
+    videoId: 'B6eki-0-w0g',
+    category: 'cctv'
+  },
+  {
+    id: 'taoyuan-airport',
+    name: '桃園國際機場即時影像 Taoyuan Airport 4K',
+    city: 'Taoyuan',
+    country: 'Taiwan',
+    lat: 25.0797,
+    lon: 121.2342,
+    videoId: 'y3_x8el5ZJY',
+    category: 'traffic'
+  },
+  {
     id: 'keelung-port',
     name: '基隆港海運即時監控 Keelung Port Live Cam',
     city: 'Keelung',
@@ -41,13 +81,13 @@ export const CCTV_PRESETS: CCTVPoint[] = [
     category: 'port'
   },
   {
-    id: 'tokyo-shibuya',
-    name: '東京澀谷 Tokyo Shibuya Crossing 4K Live',
-    city: 'Tokyo',
-    country: 'Japan',
-    lat: 35.6595,
-    lon: 139.7004,
-    videoId: '_k-5U7IeK8g',
+    id: 'new-york-times-square',
+    name: '紐約時代廣場 New York Times Square 4K',
+    city: 'New York',
+    country: 'USA',
+    lat: 40.758,
+    lon: -73.9855,
+    videoId: '4qyZLflp-sI',
     category: 'cctv'
   },
   {
@@ -71,16 +111,6 @@ export const CCTV_PRESETS: CCTVPoint[] = [
     category: 'news'
   },
   {
-    id: 'new-york-times-square',
-    name: '紐約時代廣場 New York Times Square 4K',
-    city: 'New York',
-    country: 'USA',
-    lat: 40.758,
-    lon: -73.9855,
-    videoId: '4qyZLflp-sI',
-    category: 'cctv'
-  },
-  {
     id: 'london-piccadilly',
     name: '倫敦皮卡迪利 London Piccadilly Circus',
     city: 'London',
@@ -99,42 +129,13 @@ export const CCTV_PRESETS: CCTVPoint[] = [
     lon: 30.5234,
     videoId: '-Q7FuPINDjA',
     category: 'cctv'
-  },
-  {
-    id: 'sky-news',
-    name: 'Sky News Live Breaking',
-    city: 'London',
-    country: 'UK',
-    lat: 51.488,
-    lon: -0.32,
-    videoId: 'uvviIF4725I',
-    category: 'news'
-  },
-  {
-    id: 'iss-earth',
-    name: 'NASA ISS HD Earth Viewing',
-    city: 'Low Earth Orbit',
-    country: 'Space',
-    lat: 0.0,
-    lon: 0.0,
-    videoId: 'vytmBNhc9ig',
-    category: 'cctv'
-  },
-  {
-    id: 'sydney-harbour',
-    name: '雪梨港灣 Sydney Harbour Live',
-    city: 'Sydney',
-    country: 'Australia',
-    lat: -33.8568,
-    lon: 151.2153,
-    videoId: '7pcL-0Wo77U',
-    category: 'cctv'
   }
 ];
 
 export const DEFAULT_MATRIX_CHANNELS: CCTVPoint[] = [
-  CCTV_PRESETS[0], // PTS News
-  CCTV_PRESETS[1], // TTV News
-  CCTV_PRESETS[4], // DW News
-  CCTV_PRESETS[3], // Tokyo Shibuya
+  CCTV_PRESETS[0], // 公視新聞台 PTS Live
+  CCTV_PRESETS[1], // 華視新聞 CTS Live
+  CCTV_PRESETS[2], // 中視新聞 CTV Live
+  CCTV_PRESETS[3], // 東京澀谷街頭 4K CCTV
+  CCTV_PRESETS[4], // 阿里山二延平步道 4K 即時影像
 ];

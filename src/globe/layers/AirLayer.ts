@@ -5,16 +5,17 @@ import { latLonToVector3 } from '../../utils/coordinates';
 export class AirLayer {
   public group: THREE.Group;
   private lineMaterial: THREE.LineBasicMaterial;
-  private aircrafts: { mesh: THREE.Mesh; points: THREE.Vector3[]; progress: number; speed: number }[] = [];
+  private aircrafts: { group: THREE.Group; points: THREE.Vector3[]; progress: number; speed: number }[] = [];
 
   constructor(earthRadius: number) {
     this.group = new THREE.Group();
     this.group.name = 'air-layer';
 
+    // Cold white thin lines, opacity 0.3
     this.lineMaterial = new THREE.LineBasicMaterial({
-      color: 0x93c5fd, // Light sky blue
+      color: 0xe2e8f0,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.30,
       depthWrite: false,
     });
 
@@ -22,8 +23,17 @@ export class AirLayer {
   }
 
   private buildAirCorridors(radius: number): void {
-    const planeGeo = new THREE.ConeGeometry(0.18, 0.5, 6);
-    planeGeo.rotateX(Math.PI / 2);
+    const coreGeo = new THREE.SphereGeometry(0.32, 12, 12);
+    const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+    const glowGeo = new THREE.SphereGeometry(0.65, 12, 12);
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: 0x93c5fd,
+      transparent: true,
+      opacity: 0.65,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
 
     for (const route of AVIATION_ROUTES) {
       const allPoints: THREE.Vector3[] = [];
@@ -36,10 +46,10 @@ export class AirLayer {
         const p2 = latLonToVector3(lat2, lon2, radius);
 
         // Subdivide with parabolic altitude arc (stratospheric cruise)
-        const segments = 16;
+        const segments = 24;
         for (let s = 0; s <= segments; s++) {
           const t = s / segments;
-          const arcAltitude = 1.0 + Math.sin(t * Math.PI) * 0.045; // peak ~4.5% above surface
+          const arcAltitude = 1.008 + Math.sin(t * Math.PI) * 0.038; // stratospheric altitude
           const pt = new THREE.Vector3().copy(p1).lerp(p2, t).normalize().multiplyScalar(radius * arcAltitude);
           allPoints.push(pt);
         }
@@ -49,18 +59,26 @@ export class AirLayer {
       const line = new THREE.Line(geom, this.lineMaterial);
       this.group.add(line);
 
-      // Moving aircraft on flight route
+      // Moving glowing aircraft particles along flight corridor
       if (allPoints.length > 2) {
-        const planeMat = new THREE.MeshBasicMaterial({ color: 0x60a5fa });
-        const planeMesh = new THREE.Mesh(planeGeo, planeMat);
-        this.group.add(planeMesh);
+        // Spawn 1 to 2 aircraft per route
+        const planesCount = route.type === 'Intercontinental' ? 2 : 1;
+        for (let p = 0; p < planesCount; p++) {
+          const planeGroup = new THREE.Group();
+          const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+          const glowMesh = new THREE.Mesh(glowGeo, glowMat);
+          planeGroup.add(coreMesh);
+          planeGroup.add(glowMesh);
 
-        this.aircrafts.push({
-          mesh: planeMesh,
-          points: allPoints,
-          progress: Math.random(),
-          speed: 0.035 + Math.random() * 0.02,
-        });
+          this.group.add(planeGroup);
+
+          this.aircrafts.push({
+            group: planeGroup,
+            points: allPoints,
+            progress: (p * 0.5 + Math.random() * 0.4) % 1.0,
+            speed: 0.025 + Math.random() * 0.02,
+          });
+        }
       }
     }
   }
@@ -75,10 +93,7 @@ export class AirLayer {
       const p2 = plane.points[nextIndex];
       const subT = (plane.progress * (plane.points.length - 1)) - index;
 
-      plane.mesh.position.lerpVectors(p1, p2, subT);
-      if (p2.distanceTo(p1) > 0.001) {
-        plane.mesh.lookAt(p2);
-      }
+      plane.group.position.lerpVectors(p1, p2, subT);
     }
   }
 

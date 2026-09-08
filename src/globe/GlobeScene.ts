@@ -37,6 +37,7 @@ export class GlobeScene {
   private cloudsMaterial!: THREE.ShaderMaterial;
   private atmosphereMesh!: THREE.Mesh;
   private atmosphereMaterial!: THREE.ShaderMaterial;
+  private tooltipEl!: HTMLElement;
 
   public cablesLayer!: CablesLayer;
   public earthquakeLayer!: EarthquakeLayer;
@@ -188,6 +189,10 @@ export class GlobeScene {
           tex.wrapT = THREE.ClampToEdgeWrapping;
           tex.minFilter = THREE.LinearMipmapLinearFilter;
           tex.magFilter = THREE.LinearFilter;
+          tex.generateMipmaps = true;
+          if (this.renderer) {
+            tex.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+          }
           tex.needsUpdate = true;
         },
         undefined,
@@ -271,9 +276,43 @@ export class GlobeScene {
   private initEvents(): void {
     window.addEventListener('resize', this.onWindowResize.bind(this));
 
+    // Create Swiss HUD floating tooltip
+    this.tooltipEl = document.createElement('div');
+    this.tooltipEl.className = 'globe-hud-tooltip';
+    this.tooltipEl.style.display = 'none';
+    document.body.appendChild(this.tooltipEl);
+
     const canvas = this.renderer.domElement;
     canvas.addEventListener('pointerdown', () => {
       this.controls.autoRotate = false;
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+      this.raycaster.setFromCamera(this.mouse, this.camera);
+      
+      const targets = [
+        ...this.cctvLayer.group.children,
+        ...this.earthquakeLayer.group.children,
+        ...this.incidentsLayer.group.children,
+        ...this.newsLayer.group.children,
+      ];
+
+      const intersects = this.raycaster.intersectObjects(targets, false);
+      if (intersects.length > 0 && intersects[0].object.userData?.type) {
+        canvas.style.cursor = 'pointer';
+        this.updateTooltip(intersects[0].object.userData, e.clientX, e.clientY);
+      } else {
+        canvas.style.cursor = 'grab';
+        this.hideTooltip();
+      }
+    });
+
+    canvas.addEventListener('pointerleave', () => {
+      this.hideTooltip();
     });
 
     canvas.addEventListener('click', (e) => {
@@ -297,6 +336,10 @@ export class GlobeScene {
           const pt = obj.userData.point as CCTVPoint;
           this.focusCoordinates(pt.lat, pt.lon);
           this.onSelectCctv?.(pt);
+        } else if (obj.userData?.type === 'earthquake') {
+          const q = obj.userData.quake as EarthquakeItem;
+          this.focusCoordinates(q.lat, q.lon);
+          this.onSelectEarthquake?.(q);
         } else if (obj.userData?.type === 'incident') {
           const inc = obj.userData.incident as GeoIncident;
           this.focusCoordinates(inc.lat, inc.lon);
@@ -308,6 +351,79 @@ export class GlobeScene {
         }
       }
     });
+  }
+
+  private updateTooltip(userData: any, clientX: number, clientY: number): void {
+    if (!this.tooltipEl || !userData || !userData.type) {
+      this.hideTooltip();
+      return;
+    }
+
+    let badgeText = '';
+    let badgeClass = '';
+    let titleText = '';
+    let detailText = '';
+
+    if (userData.type === 'earthquake' && userData.quake) {
+      const q: EarthquakeItem = userData.quake;
+      const minAgo = Math.max(1, Math.floor((Date.now() - q.time) / 60000));
+      const timeStr = minAgo < 60 ? `${minAgo} 分鐘前` : `${Math.floor(minAgo / 60)} 小時前`;
+      badgeText = 'USGS 地震';
+      badgeClass = q.mag >= 6.0 ? 'badge-critical' : q.mag >= 4.5 ? 'badge-elevated' : 'badge-monitor';
+      titleText = `規模 M${q.mag.toFixed(1)} / 深度 ${q.depth.toFixed(0)}km / 地點：${q.place} / 時間：${timeStr}`;
+      detailText = `座標：${q.lat.toFixed(2)}°, ${q.lon.toFixed(2)}° (點擊聚焦視角)`;
+    } else if (userData.type === 'cctv' && userData.point) {
+      const pt: CCTVPoint = userData.point;
+      badgeText = '即時監視攝影機';
+      badgeClass = 'badge-cctv';
+      titleText = `${pt.name} (點擊連動視窗)`;
+      detailText = `位置：${pt.city}, ${pt.country} | 類別：${pt.category.toUpperCase()}`;
+    } else if (userData.type === 'incident' && userData.incident) {
+      const inc: GeoIncident = userData.incident;
+      badgeText = '全球地緣事件';
+      badgeClass = inc.level === 'CRITICAL' ? 'badge-critical' : 'badge-elevated';
+      titleText = `事件：${inc.title} / 地點：${inc.location}`;
+      detailText = `情報層級：${inc.level} | 座標：${inc.lat.toFixed(2)}°, ${inc.lon.toFixed(2)}°`;
+    } else if (userData.type === 'news' && userData.item) {
+      const nw: GeoNewsItem = userData.item;
+      badgeText = '即時全球新聞';
+      badgeClass = 'badge-news';
+      titleText = `焦點：${nw.headline}`;
+      detailText = `來源：${nw.source} | 地點：${nw.city} (${nw.time}) | 點擊定位`;
+    } else {
+      this.hideTooltip();
+      return;
+    }
+
+    this.tooltipEl.innerHTML = `
+      <div class="hud-tooltip-header">
+        <span class="hud-tooltip-badge ${badgeClass}">[${badgeText}]</span>
+      </div>
+      <div class="hud-tooltip-title">${titleText}</div>
+      <div class="hud-tooltip-detail">${detailText}</div>
+    `;
+
+    const offset = 15;
+    let left = clientX + offset;
+    let top = clientY + offset;
+
+    const w = 340;
+    if (left + w > window.innerWidth) {
+      left = Math.max(10, clientX - w - offset);
+    }
+    if (top + 80 > window.innerHeight) {
+      top = Math.max(10, clientY - 80 - offset);
+    }
+
+    this.tooltipEl.style.left = `${left}px`;
+    this.tooltipEl.style.top = `${top}px`;
+    this.tooltipEl.style.display = 'block';
+  }
+
+  private hideTooltip(): void {
+    if (this.tooltipEl) {
+      this.tooltipEl.style.display = 'none';
+    }
   }
 
   public focusCoordinates(lat: number, lon: number, distance = 160): void {
@@ -444,6 +560,9 @@ export class GlobeScene {
   public destroy(): void {
     this.isAnimating = false;
     window.removeEventListener('resize', this.onWindowResize.bind(this));
+    if (this.tooltipEl && this.tooltipEl.parentElement) {
+      this.tooltipEl.parentElement.removeChild(this.tooltipEl);
+    }
     this.renderer.dispose();
     if (this.renderer.domElement.parentElement) {
       this.renderer.domElement.parentElement.removeChild(this.renderer.domElement);

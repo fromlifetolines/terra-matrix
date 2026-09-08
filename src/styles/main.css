@@ -361,6 +361,59 @@ html, body {
   line-height: 1.4;
 }
 
+/* Globe HUD Hover Tooltip */
+.globe-hud-tooltip {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  background: rgba(9, 9, 11, 0.94);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  color: #fff;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.85);
+  max-width: 380px;
+  user-select: none;
+  transition: opacity 0.1s ease;
+}
+
+.hud-tooltip-header {
+  margin-bottom: 4px;
+}
+
+.hud-tooltip-badge {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 5px;
+  border-radius: 2px;
+  text-transform: uppercase;
+  display: inline-block;
+}
+
+.hud-tooltip-badge.badge-critical { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; }
+.hud-tooltip-badge.badge-elevated { background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid #f59e0b; }
+.hud-tooltip-badge.badge-monitor  { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981; }
+.hud-tooltip-badge.badge-cctv     { background: rgba(6, 182, 212, 0.2); color: #06b6d4; border: 1px solid #06b6d4; }
+.hud-tooltip-badge.badge-news     { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8; }
+
+.hud-tooltip-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.35;
+  margin-bottom: 2px;
+}
+
+.hud-tooltip-detail {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
 /* ==========================================================================
    Bottom Live Stream Matrix (Swiss Grid)
    ========================================================================== */
@@ -557,10 +610,13 @@ html, body {
   min-height: 100%;
 }
 
+.grid-1x1 { grid-template-columns: 1fr; }
 .grid-1x2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .grid-2x2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-2x3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .grid-2x4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .grid-3x3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-auto { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
 
 .matrix-grid.has-fullscreen-tile {
   grid-template-columns: 1fr !important;

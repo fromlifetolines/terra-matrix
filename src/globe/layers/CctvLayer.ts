@@ -46,6 +46,7 @@ export class CctvLayer {
       const ringMesh = new THREE.Mesh(ringGeo, ringMat);
       ringMesh.position.copy(pos);
       ringMesh.quaternion.copy(orientation);
+      ringMesh.userData = { type: 'cctv', point };
       this.group.add(ringMesh);
 
       this.beacons.push({ mesh: coreMesh, ring: ringMesh, point });

@@ -150,5 +150,69 @@ export const AVIATION_ROUTES: GeoRoute[] = [
       [60.0, -100.0],  // Hudson
       [40.64, -73.78]  // JFK
     ]
+  },
+  {
+    id: 'tpe-nrt',
+    name: 'Taipei - Tokyo Express Skyway',
+    category: 'aviation',
+    type: 'Regional Trunk',
+    waypoints: [
+      [25.08, 121.23], // TPE
+      [28.0, 125.0],
+      [31.5, 131.0],
+      [35.77, 140.39]  // NRT
+    ]
+  },
+  {
+    id: 'tpe-sin',
+    name: 'Taipei - Singapore South China Skyway',
+    category: 'aviation',
+    type: 'Regional Trunk',
+    waypoints: [
+      [25.08, 121.23], // TPE
+      [20.0, 117.0],
+      [12.0, 111.0],
+      [4.0, 106.0],
+      [1.36, 103.99]   // SIN
+    ]
+  },
+  {
+    id: 'lhr-dxb',
+    name: 'London - Dubai Middle East Skyway',
+    category: 'aviation',
+    type: 'Intercontinental',
+    waypoints: [
+      [51.47, -0.45],  // LHR
+      [46.0, 14.0],
+      [39.0, 32.0],
+      [30.0, 48.0],
+      [25.25, 55.36]   // DXB
+    ]
+  },
+  {
+    id: 'sin-syd',
+    name: 'Singapore - Sydney Kangaroo Route',
+    category: 'aviation',
+    type: 'Intercontinental',
+    waypoints: [
+      [1.36, 103.99],  // SIN
+      [-8.7, 115.2],   // Bali
+      [-20.0, 128.0],  // Western Australia
+      [-28.0, 140.0],  // Central Australia
+      [-33.94, 151.17] // SYD
+    ]
+  },
+  {
+    id: 'lax-syd',
+    name: 'Transpacific South (Los Angeles - Sydney)',
+    category: 'aviation',
+    type: 'Trans-Oceanic',
+    waypoints: [
+      [33.94, -118.41], // LAX
+      [15.0, -145.0],
+      [-5.0, -170.0],
+      [-20.0, 175.0],
+      [-33.94, 151.17]  // SYD
+    ]
   }
 ];

@@ -77,7 +77,7 @@ class TerraMatrixApp {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="12 8 8 12 12 16 12 8"/></svg>
             RESET VIEW
           </button>
-          <div class="utc-clock" id="utc-clock">00:00:00 UTC</div>
+          <div class="utc-clock" id="tpe-clock">0000-00-00 00:00:00 TPE</div>
         </div>
       </header>
 
@@ -96,35 +96,35 @@ class TerraMatrixApp {
               <div class="pill-layers-list">
                 <label class="layer-toggle-item" title="Global live cameras and previews">
                   <input type="checkbox" id="layer-cctv" checked />
-                  <span>cctv</span>
+                  <span>📷 CCTV 視訊</span>
                 </label>
                 <label class="layer-toggle-item" title="Major news coordinates">
                   <input type="checkbox" id="layer-live_news" checked />
-                  <span>live_news</span>
+                  <span>📰 即時新聞</span>
                 </label>
                 <label class="layer-toggle-item" title="USGS real-time earthquake ripples">
                   <input type="checkbox" id="layer-earthquakes" checked />
-                  <span>earthquakes</span>
+                  <span>⚡ 地震波紋</span>
                 </label>
                 <label class="layer-toggle-item" title="Geopolitical critical flashpoints">
                   <input type="checkbox" id="layer-global_incidents" checked />
-                  <span>global_incidents</span>
+                  <span>🚨 全球事件</span>
                 </label>
                 <label class="layer-toggle-item" title="Solar day-night terminator (UTC)">
                   <input type="checkbox" id="layer-day_night" checked />
-                  <span>day_night</span>
+                  <span>🌓 日夜晨昏</span>
                 </label>
                 <label class="layer-toggle-item" title="Undersea fiber-optic cables">
                   <input type="checkbox" id="layer-cables" checked />
-                  <span>cables</span>
+                  <span>🌐 海底光纜</span>
                 </label>
                 <label class="layer-toggle-item" title="Maritime shipping corridors">
                   <input type="checkbox" id="layer-maritime" checked />
-                  <span>maritime</span>
+                  <span>🚢 戰略航道</span>
                 </label>
                 <label class="layer-toggle-item" title="Aviation international skyways">
                   <input type="checkbox" id="layer-sdk_air" checked />
-                  <span>sdk_air</span>
+                  <span>✈️ 國際空域航線 (Air Corridors)</span>
                 </label>
               </div>
             </div>
@@ -263,12 +263,18 @@ class TerraMatrixApp {
   }
 
   private initClock(): void {
-    const clockEl = document.getElementById('utc-clock');
+    const clockEl = document.getElementById('tpe-clock');
     const update = () => {
       if (clockEl) {
         const now = new Date();
-        const iso = now.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
-        clockEl.textContent = iso;
+        const tpeDate = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Taipei' }));
+        const y = tpeDate.getFullYear();
+        const m = String(tpeDate.getMonth() + 1).padStart(2, '0');
+        const d = String(tpeDate.getDate()).padStart(2, '0');
+        const hh = String(tpeDate.getHours()).padStart(2, '0');
+        const mm = String(tpeDate.getMinutes()).padStart(2, '0');
+        const ss = String(tpeDate.getSeconds()).padStart(2, '0');
+        clockEl.textContent = `${y}-${m}-${d} ${hh}:${mm}:${ss} TPE`;
       }
     };
     update();

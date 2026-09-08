@@ -108,6 +108,7 @@ export class EarthquakeLayer {
       const dotMat = new THREE.MeshBasicMaterial({ color: colorHex });
       const dotMesh = new THREE.Mesh(dotGeo, dotMat);
       dotMesh.position.copy(pos);
+      dotMesh.userData = { type: 'earthquake', quake: q };
       this.group.add(dotMesh);
 
       // Create 2 concentric ripple rings
@@ -124,6 +125,7 @@ export class EarthquakeLayer {
         const ringMesh = new THREE.Mesh(this.ringGeometry, ringMat);
         ringMesh.position.copy(pos);
         ringMesh.quaternion.copy(orientation);
+        ringMesh.userData = { type: 'earthquake', quake: q };
         this.group.add(ringMesh);
         rings.push(ringMesh);
       }

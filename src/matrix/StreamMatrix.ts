@@ -1,6 +1,6 @@
 import { DEFAULT_MATRIX_CHANNELS, CCTV_PRESETS, type CCTVPoint } from '../data/cctv-presets';
 
-export type MatrixGridLayout = '1x2' | '2x2' | '2x4' | '3x3';
+export type MatrixGridLayout = '1x1' | '1x2' | '2x2' | '2x3' | '2x4' | '3x3' | 'auto';
 
 export interface MatrixChannel {
   id: string;
@@ -10,8 +10,8 @@ export interface MatrixChannel {
   country?: string;
 }
 
-const STORAGE_CHANNELS_KEY = 'terra_matrix_channels_v2';
-const STORAGE_LAYOUT_KEY = 'terra_matrix_layout_v2';
+const STORAGE_CHANNELS_KEY = 'terra_matrix_channels_v3';
+const STORAGE_LAYOUT_KEY = 'terra_matrix_layout_v3';
 
 export class StreamMatrix {
   private container: HTMLElement;
@@ -31,12 +31,23 @@ export class StreamMatrix {
 
   private loadState(): void {
     try {
-      const savedChannels = localStorage.getItem(STORAGE_CHANNELS_KEY);
+      // Check v3 storage first, fallback to v2 with automatic cleanup
+      let savedChannels = localStorage.getItem(STORAGE_CHANNELS_KEY);
+      if (!savedChannels) {
+        savedChannels = localStorage.getItem('terra_matrix_channels_v2');
+      }
+
       if (savedChannels) {
         let parsed: MatrixChannel[] = JSON.parse(savedChannels);
-        // Auto-migrate legacy or broken TTV videoId to CTS News
+
+        // Filter out broken feeds (e.g. Sydney Harbour, obsolete TTV)
+        parsed = parsed.filter(
+          (ch) => ch.id !== 'sydney-harbour' && ch.videoId !== '7pcL-0Wo77U' && ch.videoId !== 'xL0ch83RAK8'
+        );
+
+        // Auto-migrate legacy channel IDs
         parsed = parsed.map((ch) => {
-          if (ch.videoId === 'xL0ch83RAK8' || ch.id === 'ttv-news') {
+          if (ch.id === 'ttv-news') {
             return {
               id: 'cts-news',
               name: '華視新聞 CH52 CTS News Live',
@@ -45,9 +56,27 @@ export class StreamMatrix {
               country: 'Taiwan',
             };
           }
+          if (ch.id === 'tokyo-shibuya' && ch.videoId !== '8H3nRCFVR6Y') {
+            return {
+              ...ch,
+              videoId: '8H3nRCFVR6Y',
+            };
+          }
           return ch;
         });
-        this.channels = parsed;
+
+        // If after cleaning we have fewer than 3 channels, populate with default channels
+        if (parsed.length < 3) {
+          this.channels = DEFAULT_MATRIX_CHANNELS.map((c) => ({
+            id: c.id,
+            name: c.name,
+            videoId: c.videoId,
+            city: c.city,
+            country: c.country,
+          }));
+        } else {
+          this.channels = parsed;
+        }
       } else {
         this.channels = DEFAULT_MATRIX_CHANNELS.map((c) => ({
           id: c.id,
@@ -58,12 +87,19 @@ export class StreamMatrix {
         }));
       }
 
-      const savedLayout = localStorage.getItem(STORAGE_LAYOUT_KEY);
-      if (savedLayout && ['1x2', '2x2', '2x4', '3x3'].includes(savedLayout)) {
+      const savedLayout = localStorage.getItem(STORAGE_LAYOUT_KEY) || localStorage.getItem('terra_matrix_layout_v2');
+      if (savedLayout && ['1x1', '1x2', '2x2', '2x3', '2x4', '3x3', 'auto'].includes(savedLayout)) {
         this.currentLayout = savedLayout as MatrixGridLayout;
       }
     } catch (e) {
-      console.warn('[StreamMatrix] Failed to load localStorage state:', e);
+      console.warn('[StreamMatrix] Failed to load localStorage state, using defaults:', e);
+      this.channels = DEFAULT_MATRIX_CHANNELS.map((c) => ({
+        id: c.id,
+        name: c.name,
+        videoId: c.videoId,
+        city: c.city,
+        country: c.country,
+      }));
     }
   }
 
@@ -83,7 +119,6 @@ export class StreamMatrix {
   }
 
   public addChannel(channel: MatrixChannel): void {
-    // Check if duplicate videoId already exists
     const exists = this.channels.some((c) => c.videoId === channel.videoId);
     if (!exists) {
       this.channels.push(channel);
@@ -114,12 +149,10 @@ export class StreamMatrix {
 
   public toggleSoloAudio(channelId: string): void {
     if (this.soloChannelId === channelId) {
-      // Mute all
       this.soloChannelId = null;
       this.muteAllIframes();
     } else {
       this.soloChannelId = channelId;
-      // Unmute target, mute others
       this.channels.forEach((c) => {
         const iframe = document.getElementById(`iframe-${c.id}`) as HTMLIFrameElement | null;
         if (!iframe || !iframe.contentWindow) return;
@@ -183,12 +216,10 @@ export class StreamMatrix {
     const trimmed = input.trim();
     if (!trimmed) return null;
 
-    // Direct 11-char ID
     if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
       return trimmed;
     }
 
-    // URL parser
     try {
       const url = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
       if (url.hostname.includes('youtube.com')) {
@@ -202,14 +233,13 @@ export class StreamMatrix {
         if (/^[a-zA-Z0-9_-]{11}$/.test(id)) return id;
       }
     } catch {
-      // Ignore URL parsing error
+      // URL parse fallback
     }
 
     return null;
   }
 
   public render(): void {
-    // If fullscreen tile is active, only render that tile; otherwise render ALL channels with scrolling
     const activeChannels = this.fullscreenTileId
       ? this.channels.filter((c) => c.id === this.fullscreenTileId)
       : this.channels;
@@ -248,12 +278,15 @@ export class StreamMatrix {
             </select>
           </div>
 
-          <!-- Layout Switcher -->
+          <!-- Expanded Layout Switcher (1x1, 1x2, 2x2, 2x3, 2x4, 3x3, AUTO) -->
           <div class="matrix-layout-presets">
-            <button class="layout-btn ${this.currentLayout === '1x2' ? 'active' : ''}" data-layout="1x2" title="2 Columns">1×2</button>
-            <button class="layout-btn ${this.currentLayout === '2x2' ? 'active' : ''}" data-layout="2x2" title="2 Columns (Default)">2×2</button>
-            <button class="layout-btn ${this.currentLayout === '2x4' ? 'active' : ''}" data-layout="2x4" title="4 Columns">2×4</button>
-            <button class="layout-btn ${this.currentLayout === '3x3' ? 'active' : ''}" data-layout="3x3" title="3 Columns">3×3</button>
+            <button class="layout-btn ${this.currentLayout === '1x1' ? 'active' : ''}" data-layout="1x1" title="1×1 (Single Feed Full View)">1×1</button>
+            <button class="layout-btn ${this.currentLayout === '1x2' ? 'active' : ''}" data-layout="1x2" title="1×2 (Dual Split Comparison)">1×2</button>
+            <button class="layout-btn ${this.currentLayout === '2x2' ? 'active' : ''}" data-layout="2x2" title="2×2 (Standard 4 Quad)">2×2</button>
+            <button class="layout-btn ${this.currentLayout === '2x3' ? 'active' : ''}" data-layout="2x3" title="2×3 (6 Feeds Matrix)">2×3</button>
+            <button class="layout-btn ${this.currentLayout === '2x4' ? 'active' : ''}" data-layout="2x4" title="2×4 (8 Feeds Matrix)">2×4</button>
+            <button class="layout-btn ${this.currentLayout === '3x3' ? 'active' : ''}" data-layout="3x3" title="3×3 (9 Feeds Matrix)">3×3</button>
+            <button class="layout-btn ${this.currentLayout === 'auto' ? 'active' : ''}" data-layout="auto" title="AUTO (Adaptive Fill)">AUTO</button>
           </div>
         </div>
 
@@ -347,7 +380,7 @@ export class StreamMatrix {
   }
 
   private bindEvents(): void {
-    // Layout switcher
+    // Layout switcher (1x1, 1x2, 2x2, 2x3, 2x4, 3x3, auto)
     this.container.querySelectorAll('.layout-btn').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         const layout = (e.currentTarget as HTMLElement).dataset.layout as MatrixGridLayout;
