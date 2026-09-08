@@ -26,10 +26,10 @@ export interface GlobeLayerState {
 
 export class GlobeScene {
   private container: HTMLElement;
-  private scene: THREE.Scene;
-  private camera: THREE.PerspectiveCamera;
-  private renderer: THREE.WebGLRenderer;
-  private controls: OrbitControls;
+  private scene!: THREE.Scene;
+  private camera!: THREE.PerspectiveCamera;
+  private renderer!: THREE.WebGLRenderer;
+  private controls!: OrbitControls;
 
   private earthMesh!: THREE.Mesh;
   private earthMaterial!: THREE.ShaderMaterial;
@@ -70,39 +70,57 @@ export class GlobeScene {
   constructor(container: HTMLElement) {
     this.container = container;
 
-    // Scene
-    this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x050507);
+    try {
+      // Scene
+      this.scene = new THREE.Scene();
+      this.scene.background = new THREE.Color(0x050507);
 
-    // Camera
-    const aspect = container.clientWidth / (container.clientHeight || 1);
-    this.camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 2000);
-    this.camera.position.set(0, 30, 260);
+      // Camera
+      const aspect = container.clientWidth / (container.clientHeight || 1);
+      this.camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 2000);
+      this.camera.position.set(0, 30, 260);
 
-    // Renderer
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
-    this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.1;
-    container.appendChild(this.renderer.domElement);
+      // Renderer
+      this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+      this.renderer.setSize(container.clientWidth, container.clientHeight);
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      this.renderer.toneMappingExposure = 1.1;
+      container.appendChild(this.renderer.domElement);
 
-    // Controls
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
-    this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.05;
-    this.controls.rotateSpeed = 0.65;
-    this.controls.minDistance = 115;
-    this.controls.maxDistance = 500;
-    this.controls.autoRotate = true;
-    this.controls.autoRotateSpeed = 0.25;
+      // Controls
+      this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+      this.controls.enableDamping = true;
+      this.controls.dampingFactor = 0.05;
+      this.controls.rotateSpeed = 0.65;
+      this.controls.minDistance = 115;
+      this.controls.maxDistance = 500;
+      this.controls.autoRotate = true;
+      this.controls.autoRotateSpeed = 0.25;
 
-    this.initStars();
-    this.initEarth();
-    this.initLayers();
-    this.initEvents();
+      this.initStars();
+      this.initEarth();
+      this.initLayers();
+      this.initEvents();
 
-    this.start();
+      this.start();
+    } catch (err) {
+      console.error('[GlobeScene] WebGL initialization failed, rendering tactical 2D fallback:', err);
+      container.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;width:100%;background:#050507;color:#9ca3af;font-family:'JetBrains Mono',monospace;text-align:center;padding:20px;box-sizing:border-box;">
+          <div style="color:#10b981;font-size:16px;font-weight:700;margin-bottom:8px;letter-spacing:0.1em;">TERRA MATRIX // 2D TACTICAL MODE</div>
+          <div style="font-size:12px;max-width:480px;line-height:1.6;color:#6b7280;">3D WebGL acceleration context unavailable or degraded in this browser environment. The Swiss Grid Live Video Matrix below is fully operational.</div>
+        </div>
+      `;
+      // Dummy stubs so public API methods don't crash
+      this.cablesLayer = { setVisible: () => {} } as unknown as CablesLayer;
+      this.earthquakeLayer = { setVisible: () => {} } as unknown as EarthquakeLayer;
+      this.cctvLayer = { setVisible: () => {} } as unknown as CctvLayer;
+      this.newsLayer = { setVisible: () => {} } as unknown as NewsLayer;
+      this.incidentsLayer = { setVisible: () => {} } as unknown as IncidentsLayer;
+      this.maritimeLayer = { setVisible: () => {} } as unknown as MaritimeLayer;
+      this.airLayer = { setVisible: () => {} } as unknown as AirLayer;
+    }
   }
 
   private initStars(): void {
@@ -140,39 +158,78 @@ export class GlobeScene {
     this.scene.add(starPoints);
   }
 
+  private createFallbackTexture(color = '#1e293b'): THREE.CanvasTexture {
+    const canvas = document.createElement('canvas');
+    canvas.width = 16;
+    canvas.height = 16;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, 16, 16);
+    }
+    return new THREE.CanvasTexture(canvas);
+  }
+
   private initEarth(): void {
-    const baseUrl = import.meta.env.BASE_URL;
+    const getAssetUrl = (filename: string): string => {
+      const base = (import.meta.env.BASE_URL || '/terra-matrix/').replace(/\/+$/, '') + '/';
+      return `${base}${filename.replace(/^\/+/, '')}`;
+    };
+
     const textureLoader = new THREE.TextureLoader();
 
-    const dayTexture = textureLoader.load(`${baseUrl}textures/earth-blue-marble.jpg`);
-    const nightTexture = textureLoader.load(`${baseUrl}textures/earth_lights.png`);
-    const normalTexture = textureLoader.load(`${baseUrl}textures/earth_normal.jpg`);
-    const specularTexture = textureLoader.load(`${baseUrl}textures/earth_specular.jpg`);
+    const loadSafe = (path: string, fallbackColor: string): THREE.Texture => {
+      return textureLoader.load(
+        getAssetUrl(path),
+        (tex) => {
+          tex.wrapS = THREE.ClampToEdgeWrapping;
+          tex.wrapT = THREE.ClampToEdgeWrapping;
+          tex.minFilter = THREE.LinearMipmapLinearFilter;
+          tex.magFilter = THREE.LinearFilter;
+          tex.needsUpdate = true;
+        },
+        undefined,
+        (err) => {
+          console.warn(`[GlobeScene] Failed to load texture ${path}, using fallback:`, err);
+        }
+      );
+    };
 
-    [dayTexture, nightTexture, normalTexture, specularTexture].forEach((tex) => {
-      tex.wrapS = THREE.ClampToEdgeWrapping;
-      tex.wrapT = THREE.ClampToEdgeWrapping;
-      tex.minFilter = THREE.LinearMipmapLinearFilter;
-      tex.magFilter = THREE.LinearFilter;
-    });
+    const dayTexture = loadSafe('earth-blue-marble.jpg', '#0f172a');
+    const nightTexture = loadSafe('earth_lights.png', '#020617');
+    const normalTexture = loadSafe('earth_normal.jpg', '#8080ff');
+    const specularTexture = loadSafe('earth_specular.jpg', '#000000');
 
     // Earth Sphere Geometry
     const earthGeometry = new THREE.SphereGeometry(this.earthRadius, 96, 96);
-    this.earthMaterial = createEarthMaterial({
-      day: dayTexture,
-      night: nightTexture,
-      normal: normalTexture,
-      specular: specularTexture,
-    });
+    try {
+      this.earthMaterial = createEarthMaterial({
+        day: dayTexture,
+        night: nightTexture,
+        normal: normalTexture,
+        specular: specularTexture,
+      });
+    } catch (err) {
+      console.warn('[GlobeScene] Custom EarthShader failed, using fallback StandardMaterial:', err);
+      this.earthMaterial = new THREE.MeshStandardMaterial({
+        map: dayTexture,
+        roughness: 0.8,
+        metalness: 0.1,
+      }) as unknown as THREE.ShaderMaterial;
+    }
 
     this.earthMesh = new THREE.Mesh(earthGeometry, this.earthMaterial);
     this.scene.add(this.earthMesh);
 
     // Outer Atmosphere Halo Mesh
-    const atmosphereGeometry = new THREE.SphereGeometry(this.earthRadius * 1.018, 64, 64);
-    this.atmosphereMaterial = createAtmosphereMaterial();
-    this.atmosphereMesh = new THREE.Mesh(atmosphereGeometry, this.atmosphereMaterial);
-    this.scene.add(this.atmosphereMesh);
+    try {
+      const atmosphereGeometry = new THREE.SphereGeometry(this.earthRadius * 1.018, 64, 64);
+      this.atmosphereMaterial = createAtmosphereMaterial();
+      this.atmosphereMesh = new THREE.Mesh(atmosphereGeometry, this.atmosphereMaterial);
+      this.scene.add(this.atmosphereMesh);
+    } catch (err) {
+      console.warn('[GlobeScene] Atmosphere halo failed to initialize:', err);
+    }
   }
 
   private initLayers(): void {

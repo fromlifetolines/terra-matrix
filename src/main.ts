@@ -11,11 +11,30 @@ class TerraMatrixApp {
   private infoCardEl: HTMLElement | null = null;
 
   constructor() {
-    this.initLayout();
-    this.initGlobe();
-    this.initMatrix();
-    this.initClock();
-    this.initHeaderActions();
+    try {
+      this.initLayout();
+    } catch (e) {
+      console.error('[TerraMatrixApp] Layout initialization failed:', e);
+    }
+
+    try {
+      this.initGlobe();
+    } catch (e) {
+      console.error('[TerraMatrixApp] Globe initialization failed:', e);
+    }
+
+    try {
+      this.initMatrix();
+    } catch (e) {
+      console.error('[TerraMatrixApp] Matrix initialization failed:', e);
+    }
+
+    try {
+      this.initClock();
+      this.initHeaderActions();
+    } catch (e) {
+      console.error('[TerraMatrixApp] Header actions initialization failed:', e);
+    }
   }
 
   private initLayout(): void {
