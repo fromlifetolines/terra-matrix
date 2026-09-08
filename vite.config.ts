@@ -12,5 +12,8 @@ export default defineConfig({
     assetsDir: 'assets',
     sourcemap: false,
     chunkSizeWarningLimit: 2000,
-  }
+  },
+  resolve: {
+    dedupe: ['three'],
+  },
 });
