@@ -1,4 +1,5 @@
 import type { Map as MlMap } from 'maplibre-gl';
+import Hls from 'hls.js';
 import { layoutTile, tileHeight, tilesOverlap, type TileGeometry } from './tile-layout';
 import type { CctvCamera } from '../data/cctv-cameras';
 
@@ -21,6 +22,7 @@ export class CctvPreviewsManager {
   private onSelectCamera?: (cam: CctvCamera) => void;
   private isDestroyed = false;
   private refreshIntervals: Map<string, number> = new Map();
+  private tileHlsMap: Map<string, Hls> = new Map();
 
   constructor(map: MlMap, parentElement: HTMLElement, onSelect?: (cam: CctvCamera) => void) {
     this.map = map;
@@ -160,24 +162,47 @@ export class CctvPreviewsManager {
         </div>
       `;
 
-      // Preview Frame
-      const mediaSrc = resolveMediaUrl(cam);
-      const isSnapshot = mediaSrc && !mediaSrc.includes('img.youtube.com');
+      // Preview Frame: detect HLS stream vs snapshot vs YouTube
+      const isHls = Boolean(
+        cam.stream_type === 'hls' ||
+        (cam.stream_url && (cam.stream_url.includes('.m3u8') || cam.stream_url.includes('/hls/')))
+      );
 
-      const imageHtml = `
-        <div class="cctv-tile-media" style="height: ${GEOM.imageHeight}px;">
-          ${
-            mediaSrc
-              ? `<img src="${mediaSrc}" alt="${cam.name}" referrerpolicy="no-referrer" class="cctv-tile-img" id="cctv-img-${cam.id}" />`
-              : ''
-          }
-          <div class="cctv-tile-fallback" id="cctv-fb-${cam.id}" style="${mediaSrc ? 'display:none;' : 'display:flex;'}">
-            <div class="cctv-scanline-sweep"></div>
-            <div class="cctv-fallback-radar"></div>
-            <span class="cctv-fallback-text">FEED ACTIVE</span>
+      const mediaSrc = resolveMediaUrl(cam);
+      const isSnapshot = !isHls && mediaSrc && !mediaSrc.includes('img.youtube.com') && !mediaSrc.includes('.m3u8');
+
+      const mediaHtml = isHls
+        ? `
+          <div class="cctv-tile-media" style="height: ${GEOM.imageHeight}px;">
+            <video
+              class="cctv-tile-video"
+              id="cctv-video-${cam.id}"
+              autoplay
+              muted
+              playsinline
+              loop
+            ></video>
+            <div class="cctv-tile-fallback" id="cctv-fb-${cam.id}" style="display:none;">
+              <div class="cctv-scanline-sweep"></div>
+              <div class="cctv-fallback-radar"></div>
+              <span class="cctv-fallback-text">FEED ACTIVE</span>
+            </div>
           </div>
-        </div>
-      `;
+        `
+        : `
+          <div class="cctv-tile-media" style="height: ${GEOM.imageHeight}px;">
+            ${
+              mediaSrc && !mediaSrc.includes('.m3u8')
+                ? `<img src="${mediaSrc}" alt="${cam.name}" referrerpolicy="no-referrer" class="cctv-tile-img" id="cctv-img-${cam.id}" />`
+                : ''
+            }
+            <div class="cctv-tile-fallback" id="cctv-fb-${cam.id}" style="${mediaSrc && !mediaSrc.includes('.m3u8') ? 'display:none;' : 'display:flex;'}">
+              <div class="cctv-scanline-sweep"></div>
+              <div class="cctv-fallback-radar"></div>
+              <span class="cctv-fallback-text">FEED ACTIVE</span>
+            </div>
+          </div>
+        `;
 
       // Label strip
       const labelHtml = `
@@ -196,16 +221,53 @@ export class CctvPreviewsManager {
       tileWrapper.innerHTML = `
         <div class="cctv-tile-card">
           ${statusHtml}
-          ${imageHtml}
+          ${mediaHtml}
           ${labelHtml}
         </div>
         ${stemHtml}
       `;
 
-      // Setup image error and auto-refresh handlers
+      // Branch A: HLS Video Player for Live Stream Tile
+      if (isHls && cam.stream_url) {
+        const videoEl = tileWrapper.querySelector<HTMLVideoElement>(`#cctv-video-${cam.id}`);
+        const fbEl = tileWrapper.querySelector<HTMLElement>(`#cctv-fb-${cam.id}`);
+        if (videoEl) {
+          if (Hls.isSupported()) {
+            const hls = new Hls({
+              enableWorker: true,
+              lowLatencyMode: true,
+              maxBufferLength: 2,
+              backBufferLength: 0,
+            });
+            this.tileHlsMap.set(cam.id, hls);
+            hls.loadSource(cam.stream_url);
+            hls.attachMedia(videoEl);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+              videoEl.play().catch(() => {});
+            });
+            hls.on(Hls.Events.ERROR, (_evt, data) => {
+              if (data.fatal) {
+                if (fbEl) fbEl.style.display = 'flex';
+                videoEl.style.display = 'none';
+              }
+            });
+          } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+            videoEl.src = cam.stream_url;
+            videoEl.addEventListener('loadedmetadata', () => {
+              videoEl.play().catch(() => {});
+            });
+            videoEl.addEventListener('error', () => {
+              if (fbEl) fbEl.style.display = 'flex';
+              videoEl.style.display = 'none';
+            });
+          }
+        }
+      }
+
+      // Branch B: Snapshot image error and auto-refresh handlers
       const imgEl = tileWrapper.querySelector<HTMLImageElement>(`#cctv-img-${cam.id}`);
       const fbEl = tileWrapper.querySelector<HTMLElement>(`#cctv-fb-${cam.id}`);
-      if (imgEl && fbEl) {
+      if (!isHls && imgEl && fbEl) {
         let retried = false;
         imgEl.onerror = () => {
           if (!retried && isSnapshot) {
@@ -272,6 +334,24 @@ export class CctvPreviewsManager {
       clearInterval(timer);
     }
     this.refreshIntervals.clear();
+
+    for (const hls of this.tileHlsMap.values()) {
+      try {
+        hls.stopLoad();
+        hls.detachMedia();
+        hls.destroy();
+      } catch {}
+    }
+    this.tileHlsMap.clear();
+
+    if (this.container) {
+      const videos = this.container.querySelectorAll<HTMLVideoElement>('video');
+      videos.forEach((v) => {
+        v.pause();
+        v.removeAttribute('src');
+        v.load();
+      });
+    }
   }
 
   private clearTiles(): void {
