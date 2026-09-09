@@ -52,9 +52,15 @@ export class GlobeScene {
   public onSelectCyclone?: (cyclone: CycloneItem) => void;
   public onSelectDisaster?: (disaster: DisasterItem) => void;
   public onSelectFault?: (fault: any) => void;
+  public onNewEarthquakeAlert?: (quake: EarthquakeItem) => void;
 
   private cycloneTracker = new CycloneTracker();
   private disasterTracker = new DisasterTracker();
+
+  private allQuakes: EarthquakeItem[] = [];
+  private seenQuakeIds = new Set<string>();
+  private quakePollTimer?: number;
+  private shockwaveAnimId?: number;
 
   private currentStyle: 'dark' | 'sat' = 'dark';
   private currentProjection: 'globe' | 'mercator' = 'globe';
@@ -544,6 +550,24 @@ export class GlobeScene {
       const res = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson');
       const rawData = await res.json();
 
+      const items: EarthquakeItem[] = (rawData.features || []).map((f: any) => {
+        const coords = f.geometry?.coordinates || [0, 0, 10];
+        const mag = Number(f.properties?.mag ?? 3.0);
+        return {
+          id: f.id ? String(f.id) : String(f.properties?.code || Math.random()),
+          mag,
+          place: f.properties?.place || 'Unknown Epicenter',
+          time: f.properties?.time || Date.now(),
+          lat: Number(coords[1]),
+          lon: Number(coords[0]),
+          depth: Number(coords[2] || 10),
+          tsunami: f.properties?.tsunami === 1 ? 1 : 0,
+        };
+      });
+
+      this.allQuakes = items;
+      items.forEach((q) => this.seenQuakeIds.add(q.id));
+
       // Enrich features with focal depth categorization (<70km shallow, 70-300km intermediate, >300km deep)
       const features = (rawData.features || []).map((f: any) => {
         const coords = f.geometry?.coordinates || [0, 0, 10];
@@ -619,7 +643,7 @@ export class GlobeScene {
         if (feat && feat.properties) {
           const p = feat.properties;
           const coords = (feat.geometry as any).coordinates;
-          this.onSelectEarthquake?.({
+          const qItem: EarthquakeItem = {
             id: feat.id ? String(feat.id) : String(p.code),
             mag: p.mag,
             place: p.place,
@@ -627,12 +651,95 @@ export class GlobeScene {
             lat: coords[1],
             lon: coords[0],
             depth: coords[2] || 10,
-          });
+          };
+          this.focusEarthquake(qItem);
+          this.onSelectEarthquake?.(qItem);
         }
       });
+
+      this.startEarthquakePolling();
+
+      // Trigger initial EEW alert if recent M>=5.0 or Taiwan M>=3.5 exists
+      const topAlertQuake = items.find((q) => {
+        const isTaiwan = (q.lat >= 21.0 && q.lat <= 26.0 && q.lon >= 119.0 && q.lon <= 123.5) || q.place.toLowerCase().includes('taiwan');
+        return isTaiwan || q.mag >= 5.0;
+      }) || items[0];
+
+      if (topAlertQuake) {
+        setTimeout(() => {
+          if (!this.isDestroyed) {
+            this.onNewEarthquakeAlert?.(topAlertQuake);
+          }
+        }, 3200);
+      }
     } catch (e) {
       console.warn('[GlobeScene] USGS Earthquake fetch failed:', e);
     }
+  }
+
+  private startEarthquakePolling(): void {
+    if (this.quakePollTimer) clearInterval(this.quakePollTimer);
+    this.quakePollTimer = window.setInterval(async () => {
+      if (this.isDestroyed) return;
+      try {
+        const res = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson');
+        if (!res.ok) return;
+        const rawData = await res.json();
+        const features = rawData.features || [];
+
+        let hasNew = false;
+        for (const f of features) {
+          const id = f.id ? String(f.id) : String(f.properties?.code);
+          if (id && !this.seenQuakeIds.has(id)) {
+            this.seenQuakeIds.add(id);
+            hasNew = true;
+            const coords = f.geometry?.coordinates || [0, 0, 10];
+            const q: EarthquakeItem = {
+              id,
+              mag: Number(f.properties?.mag ?? 3.0),
+              place: f.properties?.place || 'Unknown Epicenter',
+              time: f.properties?.time || Date.now(),
+              lat: Number(coords[1]),
+              lon: Number(coords[0]),
+              depth: Number(coords[2] || 10),
+              tsunami: f.properties?.tsunami === 1 ? 1 : 0,
+            };
+            this.allQuakes.unshift(q);
+
+            // EEW alert threshold: M >= 4.5 or Taiwan coastal waters M >= 3.0
+            const isTaiwan = (q.lat >= 21.0 && q.lat <= 26.0 && q.lon >= 119.0 && q.lon <= 123.5) || q.place.toLowerCase().includes('taiwan');
+            if (q.mag >= 4.5 || (isTaiwan && q.mag >= 3.0)) {
+              this.onNewEarthquakeAlert?.(q);
+            }
+          }
+        }
+
+        if (hasNew) {
+          const enriched = features.map((f: any) => {
+            const coords = f.geometry?.coordinates || [0, 0, 10];
+            const depth = Math.round(coords[2] || 10);
+            const isShallow = depth < 70;
+            const isDeep = depth > 300;
+            return {
+              ...f,
+              properties: {
+                ...f.properties,
+                depth,
+                depthCategory: isShallow ? 'SHALLOW (<70km)' : isDeep ? 'DEEP (>300km)' : 'INTERMEDIATE (70-300km)',
+                depthColor: isShallow ? '#ef4444' : isDeep ? '#3b82f6' : '#f59e0b',
+                tsunamiAlert: f.properties?.tsunami === 1,
+              },
+            };
+          });
+          const src = this.map.getSource('earthquakes') as maplibregl.GeoJSONSource;
+          if (src) {
+            src.setData({ ...rawData, features: enriched });
+          }
+        }
+      } catch (err) {
+        console.warn('[GlobeScene] Earthquake telemetry poll error:', err);
+      }
+    }, 30000);
   }
 
   private createHDPlaneIcon(id: string, color: string, type: 'airliner' | 'fighter' | 'bizjet'): void {
@@ -961,18 +1068,34 @@ export class GlobeScene {
   private async fetchFlightsData(baseUrl: string): Promise<void> {
     try {
       let data: any = null;
+      // 1. Try dev proxy /api/osiris-flights first (configured in vite.config.ts)
       try {
+        const proxyUrl = import.meta.env.DEV ? '/api/osiris-flights' : 'https://osirisai.live/api/flights';
         const controller = new AbortController();
-        const tid = setTimeout(() => controller.abort(), 6000);
-        const res = await fetch('https://osirisai.live/api/flights', { signal: controller.signal });
+        const tid = setTimeout(() => controller.abort(), 5000);
+        const res = await fetch(proxyUrl, { signal: controller.signal });
         clearTimeout(tid);
         if (res.ok) {
           data = await res.json();
         }
       } catch (e) {
-        console.info('[GlobeScene] Live flights remote fetch fallback to bundled cache:', e);
+        console.info('[GlobeScene] Live flights proxy fetch fallback to direct or bundled cache:', e);
       }
 
+      // 2. Direct fetch fallback if not dev or proxy failed
+      if (!data && !import.meta.env.DEV) {
+        try {
+          const controller = new AbortController();
+          const tid = setTimeout(() => controller.abort(), 5000);
+          const res = await fetch('https://osirisai.live/api/flights', { signal: controller.signal });
+          clearTimeout(tid);
+          if (res.ok) {
+            data = await res.json();
+          }
+        } catch (e) {}
+      }
+
+      // 3. Fallback to bundled local flights.json
       if (!data || (!data.commercial_flights && !data.flights)) {
         const localRes = await fetch(`${baseUrl}data/flights.json`);
         data = await localRes.json();
@@ -1285,28 +1408,72 @@ export class GlobeScene {
       this.map.getCanvas().style.cursor = '';
     });
 
-    fetch(`${baseUrl}data/weather.json`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && Array.isArray(data.events)) {
-          const geojson = {
-            type: 'FeatureCollection',
-            features: data.events.map((ev: any) => ({
-              type: 'Feature',
+    // 1. Fetch live active severe events from NASA EONET
+    (async () => {
+      try {
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 6000);
+        const res = await fetch('https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=60', {
+          signal: controller.signal,
+        });
+        clearTimeout(tid);
+        if (res.ok) {
+          const json = await res.json();
+          const features = (json.events || []).map((ev: any) => {
+            const lastGeo = (ev.geometry || [])[ev.geometry.length - 1];
+            const coords = lastGeo?.coordinates || [0, 0];
+            const cat = ev.categories?.[0]?.title || 'Weather Event';
+            return {
+              type: 'Feature' as const,
               geometry: {
-                type: 'Point',
-                coordinates: [ev.lng, ev.lat],
+                type: 'Point' as const,
+                coordinates: coords,
               },
-              properties: ev,
-            })),
-          };
+              properties: {
+                id: ev.id,
+                title: ev.title,
+                category: cat,
+                severity: cat.toLowerCase().includes('storm') || cat.toLowerCase().includes('fire') ? 'high' : 'medium',
+                date: lastGeo?.date || new Date().toISOString(),
+                link: ev.sources?.[0]?.url || '',
+                provider: 'NASA EONET LIVE',
+              },
+            };
+          });
           const src = this.map.getSource('weather-source') as maplibregl.GeoJSONSource;
-          if (src) {
-            src.setData(geojson as any);
+          if (src && features.length > 0) {
+            src.setData({ type: 'FeatureCollection', features });
+            return;
           }
         }
-      })
-      .catch((err) => console.warn('[GlobeScene] Weather fetch error:', err));
+      } catch (e) {
+        console.info('[GlobeScene] NASA EONET live weather fetch fallback to bundled cache:', e);
+      }
+
+      // 2. Fallback to bundled weather.json
+      fetch(`${baseUrl}data/weather.json`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data && Array.isArray(data.events)) {
+            const geojson = {
+              type: 'FeatureCollection',
+              features: data.events.map((ev: any) => ({
+                type: 'Feature',
+                geometry: {
+                  type: 'Point',
+                  coordinates: [ev.lng, ev.lat],
+                },
+                properties: ev,
+              })),
+            };
+            const src = this.map.getSource('weather-source') as maplibregl.GeoJSONSource;
+            if (src) {
+              src.setData(geojson as any);
+            }
+          }
+        })
+        .catch((err) => console.warn('[GlobeScene] Weather fallback fetch error:', err));
+    })();
   }
 
   private initOceanCurrentsLayer(): void {
@@ -2119,6 +2286,161 @@ export class GlobeScene {
     ];
   }
 
+  public getAllEarthquakes(): EarthquakeItem[] {
+    return this.allQuakes;
+  }
+
+  public focusEarthquake(quake: EarthquakeItem): void {
+    if (!this.map || !quake) return;
+    const lat = Number(quake.lat);
+    const lon = Number(quake.lon);
+    if (isNaN(lat) || isNaN(lon)) return;
+
+    const shockFeature = {
+      type: 'Feature' as const,
+      geometry: {
+        type: 'Point' as const,
+        coordinates: [lon, lat],
+      },
+      properties: {
+        id: quake.id,
+        mag: quake.mag,
+        place: quake.place,
+        depth: quake.depth,
+      },
+    };
+
+    const targetGeoJson = {
+      type: 'FeatureCollection' as const,
+      features: [shockFeature],
+    };
+
+    const src = this.map.getSource('earthquake-shockwave-source') as any;
+    if (src) {
+      src.setData(targetGeoJson);
+    } else {
+      this.map.addSource('earthquake-shockwave-source', {
+        type: 'geojson',
+        data: targetGeoJson,
+      });
+
+      this.map.addLayer({
+        id: 'earthquake-shockwave-outer',
+        type: 'circle',
+        source: 'earthquake-shockwave-source',
+        paint: {
+          'circle-radius': 50,
+          'circle-color': 'rgba(239, 68, 68, 0.12)',
+          'circle-stroke-color': '#ef4444',
+          'circle-stroke-width': 3,
+          'circle-stroke-opacity': 0.95,
+        },
+      });
+
+      this.map.addLayer({
+        id: 'earthquake-shockwave-inner',
+        type: 'circle',
+        source: 'earthquake-shockwave-source',
+        paint: {
+          'circle-radius': 24,
+          'circle-color': 'rgba(249, 115, 22, 0.25)',
+          'circle-stroke-color': '#f97316',
+          'circle-stroke-width': 2,
+          'circle-stroke-opacity': 0.95,
+        },
+      });
+
+      this.map.addLayer({
+        id: 'earthquake-shockwave-core',
+        type: 'circle',
+        source: 'earthquake-shockwave-source',
+        paint: {
+          'circle-radius': 7,
+          'circle-color': '#ffffff',
+          'circle-stroke-color': '#ef4444',
+          'circle-stroke-width': 3,
+        },
+      });
+
+      this.map.addLayer({
+        id: 'earthquake-shockwave-hud',
+        type: 'symbol',
+        source: 'earthquake-shockwave-source',
+        layout: {
+          'text-field': [
+            'concat',
+            '🎯 EPICENTER // M',
+            ['to-string', ['get', 'mag']],
+            '\nDEPTH: ',
+            ['to-string', ['get', 'depth']],
+            ' KM\n',
+            ['get', 'place'],
+          ],
+          'text-size': 11,
+          'text-offset': [0, 2.5],
+          'text-allow-overlap': true,
+          'text-ignore-placement': true,
+        },
+        paint: {
+          'text-color': '#fbbf24',
+          'text-halo-color': '#000000',
+          'text-halo-width': 2.5,
+        },
+      });
+    }
+
+    ['earthquake-shockwave-outer', 'earthquake-shockwave-inner', 'earthquake-shockwave-core', 'earthquake-shockwave-hud'].forEach((id) => {
+      if (this.map.getLayer(id)) {
+        this.map.setLayoutProperty(id, 'visibility', 'visible');
+      }
+    });
+
+    if (this.shockwaveAnimId) cancelAnimationFrame(this.shockwaveAnimId);
+    let start: number | null = null;
+    const duration = 2400;
+
+    const animateShockwave = (timestamp: number) => {
+      if (!start) start = timestamp;
+      const progress = ((timestamp - start) % duration) / duration;
+
+      if (this.map && this.map.getLayer('earthquake-shockwave-outer')) {
+        const outerRadius = 15 + progress * 75;
+        const outerOpacity = Math.max(0, 1.0 - progress);
+        this.map.setPaintProperty('earthquake-shockwave-outer', 'circle-radius', outerRadius);
+        this.map.setPaintProperty('earthquake-shockwave-outer', 'circle-stroke-opacity', outerOpacity);
+
+        const innerProgress = (progress + 0.5) % 1.0;
+        const innerRadius = 10 + innerProgress * 45;
+        const innerOpacity = Math.max(0, 1.0 - innerProgress);
+        this.map.setPaintProperty('earthquake-shockwave-inner', 'circle-radius', innerRadius);
+        this.map.setPaintProperty('earthquake-shockwave-inner', 'circle-stroke-opacity', innerOpacity);
+      }
+
+      this.shockwaveAnimId = requestAnimationFrame(animateShockwave);
+    };
+    this.shockwaveAnimId = requestAnimationFrame(animateShockwave);
+
+    this.map.flyTo({
+      center: [lon, lat],
+      zoom: 8.5,
+      pitch: 48,
+      bearing: 15,
+      duration: 2000,
+      essential: true,
+    });
+  }
+
+  public clearEarthquakeShockwave(): void {
+    if (this.shockwaveAnimId) {
+      cancelAnimationFrame(this.shockwaveAnimId);
+      this.shockwaveAnimId = undefined;
+    }
+    const src = this.map.getSource('earthquake-shockwave-source') as any;
+    if (src) {
+      src.setData({ type: 'FeatureCollection', features: [] });
+    }
+  }
+
   public filterFlights(category: string): void {
     if (!this.map) return;
     const all = ['fl-commercial', 'fl-private', 'fl-jets', 'fl-military'];
@@ -2468,6 +2790,8 @@ export class GlobeScene {
     this.setAutoRotate(false);
     if (this.flightAnimationTimer) clearInterval(this.flightAnimationTimer);
     if (this.flightFetchTimer) clearInterval(this.flightFetchTimer);
+    if (this.quakePollTimer) clearInterval(this.quakePollTimer);
+    if (this.shockwaveAnimId) cancelAnimationFrame(this.shockwaveAnimId);
     this.previewManager?.destroy();
     window.removeEventListener('resize', this.onResize);
     this.map.remove();

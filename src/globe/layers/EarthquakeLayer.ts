@@ -9,6 +9,7 @@ export interface EarthquakeItem {
   lat: number;
   lon: number;
   depth: number;
+  tsunami?: number;
 }
 
 interface RippleAnim {

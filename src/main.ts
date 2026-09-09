@@ -15,6 +15,8 @@ import { DopplerRadarLegend } from './components/DopplerRadarLegend';
 import { CctvExpandedModal } from './components/CctvExpandedModal';
 import { DirectionsPanel } from './components/DirectionsPanel';
 import { OsintPanel } from './components/OsintPanel';
+import { EarthquakeAlertModal } from './components/EarthquakeAlertModal';
+import { EarthquakeWatchPanel } from './components/EarthquakeWatchPanel';
 import type { EarthquakeItem } from './globe/layers/EarthquakeLayer';
 import type { GeoIncident } from './data/incidents-news';
 
@@ -30,6 +32,8 @@ class TerraMatrixApp {
   private intelFeedPanel!: IntelFeedPanel;
   private marketsPanel!: MarketsPanel;
   private flightWatchPanel!: FlightWatchPanel;
+  private earthquakeWatchPanel!: EarthquakeWatchPanel;
+  private earthquakeAlertModal!: EarthquakeAlertModal;
   private aiSitrepModal!: AiSitrepModal;
   private searchBar!: SearchBar;
   private measureTool!: MeasureTool;
@@ -209,6 +213,9 @@ class TerraMatrixApp {
             </button>
             <button class="tactical-rail-btn active" id="rail-btn-cyclones" title="Live Typhoons & Tropical Cyclones Tracking">
               <span>🌀</span> CYCLONES
+            </button>
+            <button class="tactical-rail-btn active" id="rail-btn-quakes" title="Real-Time Seismic Early Warning & Quake List">
+              <span>🌋</span> QUAKES
             </button>
             <button class="tactical-rail-btn active" id="rail-btn-disasters" title="Global Extreme Hazards (Volcanoes, Floods, Wildfires)">
               <span>🌋</span> DISASTERS
@@ -556,6 +563,14 @@ class TerraMatrixApp {
       this.globeScene.toggleCyclones(active);
     });
 
+    const btnQuakes = document.getElementById('rail-btn-quakes');
+    btnQuakes?.addEventListener('click', () => {
+      const allQuakes = this.globeScene.getAllEarthquakes();
+      this.earthquakeWatchPanel.updateQuakes(allQuakes);
+      this.earthquakeWatchPanel.toggle();
+      btnQuakes.classList.toggle('active');
+    });
+
     const btnDisasters = document.getElementById('rail-btn-disasters');
     btnDisasters?.addEventListener('click', () => {
       const active = btnDisasters.classList.toggle('active');
@@ -681,8 +696,30 @@ class TerraMatrixApp {
       }
     );
 
-    // 7. Mount AI Tactical SITREP Modal (Backdrop)
+    // 6b. Mount Earthquake Watchlist Drawer (Right)
+    this.earthquakeWatchPanel = new EarthquakeWatchPanel(
+      globeWrapper,
+      (quake: EarthquakeItem) => {
+        this.globeScene.focusEarthquake(quake);
+      }
+    );
+
+    // 6c. Mount Earthquake Early Warning (EEW) Alert Modal
     const appEl = document.getElementById('app') || document.body;
+    this.earthquakeAlertModal = new EarthquakeAlertModal(
+      appEl,
+      (quake: EarthquakeItem) => {
+        this.globeScene.focusEarthquake(quake);
+      }
+    );
+
+    // Connect GlobeScene live EEW alert event
+    this.globeScene.onNewEarthquakeAlert = (quake: EarthquakeItem) => {
+      this.earthquakeAlertModal.showAlert(quake);
+      this.earthquakeWatchPanel.updateQuakes(this.globeScene.getAllEarthquakes());
+    };
+
+    // 7. Mount AI Tactical SITREP Modal (Backdrop)
     this.aiSitrepModal = new AiSitrepModal(appEl);
 
     // 8. Mount Geodesic Measure Tool HUD
@@ -761,6 +798,21 @@ class TerraMatrixApp {
     };
 
     this.globeScene.onSelectCyclone = (c: any) => {
+      if (!c || !c.name) {
+        this.showInfoCard({
+          badge: 'NORMAL MONITORING // NO ACTIVE CYCLONES',
+          badgeClass: 'MONITOR',
+          title: '全球熱帶氣旋狀態：無活躍颱風 (NO ACTIVE STORMS)',
+          content: `
+            <div style="font-size:11px;margin-bottom:8px;">
+              當前西北太平洋與各主要洋區無活躍編號颱風或颶風生成。<br/>
+              NASA EONET、JTWC 與 NOAA 國家颶風中心維持 24/7 連續自動監視中。
+            </div>
+            <div style="color:var(--accent-emerald);">● 氣象衛星雲圖與風場預報模型運作正常</div>
+          `,
+        });
+        return;
+      }
       this.showInfoCard({
         badge: `${c.alertLevel || 'CRITICAL'} // TROPICAL CYCLONE`,
         badgeClass: 'CRITICAL',
@@ -772,9 +824,9 @@ class TerraMatrixApp {
             <div><strong>Central Pressure:</strong> ${c.pressureHpa || 950} hPa</div>
             <div><strong>Sustained Wind:</strong> ${c.windKmh || 0} km/h (${c.windKnots || 0} kts)</div>
             <div><strong>Basin:</strong> ${c.basin || 'Western Pacific'}</div>
-            <div><strong>Storm Radius:</strong> Gale 7-lvl (~280km)</div>
+            <div><strong>Storm Radius:</strong> Gale 7-lvl (~${Math.round(c.radiusGaleKm || 220)}km)</div>
           </div>
-          <div style="color:var(--accent-coral);">● 暴風半徑與未來預測路徑已投影於 3D 視界</div>
+          <div style="color:var(--accent-coral);">● 暴風半徑與未來預測路徑已即時投影於 3D 視界</div>
         `,
       });
     };
