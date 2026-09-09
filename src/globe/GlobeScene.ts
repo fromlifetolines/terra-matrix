@@ -61,6 +61,7 @@ export class GlobeScene {
   private seenQuakeIds = new Set<string>();
   private quakePollTimer?: number;
   private shockwaveAnimId?: number;
+  private radarPollTimer?: number;
 
   private currentStyle: 'dark' | 'sat' = 'dark';
   private currentProjection: 'globe' | 'mercator' = 'globe';
@@ -1566,8 +1567,7 @@ export class GlobeScene {
 
   private async initDopplerRadarLayer(): Promise<void> {
     try {
-      let radarTime = Math.floor(Date.now() / 1000) - 600;
-      let radarPath = `/v2/radar/${radarTime}`;
+      let radarPath = '';
       try {
         const controller = new AbortController();
         const tid = setTimeout(() => controller.abort(), 4000);
@@ -1577,12 +1577,15 @@ export class GlobeScene {
           const json = await res.json();
           if (json.radar && json.radar.past && json.radar.past.length > 0) {
             const latest = json.radar.past[json.radar.past.length - 1];
-            radarTime = latest.time;
-            radarPath = latest.path || `/v2/radar/${radarTime}`;
+            radarPath = latest.path;
           }
         }
       } catch (e) {
-        console.warn('[GlobeScene] RainViewer API fallback to time offset:', e);
+        console.warn('[GlobeScene] RainViewer API initial fetch error:', e);
+      }
+
+      if (!radarPath) {
+        radarPath = '/v2/radar/d8afd72c25ce';
       }
 
       const tileUrl = `https://tilecache.rainviewer.com${radarPath}/256/{z}/{x}/{y}/2/1_1.png`;
@@ -1609,8 +1612,32 @@ export class GlobeScene {
           },
         });
       }
+
+      // 180s (3-minute) automatic real-time radar polling engine
+      if (this.radarPollTimer) clearInterval(this.radarPollTimer);
+      this.radarPollTimer = window.setInterval(() => {
+        this.refreshLatestDopplerRadar();
+      }, 180000);
     } catch (e) {
       console.warn('[GlobeScene] Doppler radar initialization error:', e);
+    }
+  }
+
+  public async refreshLatestDopplerRadar(): Promise<void> {
+    if (!this.map || this.isDestroyed) return;
+    try {
+      const res = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.radar && Array.isArray(json.radar.past) && json.radar.past.length > 0) {
+          const latest = json.radar.past[json.radar.past.length - 1];
+          if (latest && latest.path) {
+            this.setDopplerRadarFrame(latest.path);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[GlobeScene] Radar refresh polling error:', e);
     }
   }
 
@@ -2791,6 +2818,7 @@ export class GlobeScene {
     if (this.flightAnimationTimer) clearInterval(this.flightAnimationTimer);
     if (this.flightFetchTimer) clearInterval(this.flightFetchTimer);
     if (this.quakePollTimer) clearInterval(this.quakePollTimer);
+    if (this.radarPollTimer) clearInterval(this.radarPollTimer);
     if (this.shockwaveAnimId) cancelAnimationFrame(this.shockwaveAnimId);
     this.previewManager?.destroy();
     window.removeEventListener('resize', this.onResize);

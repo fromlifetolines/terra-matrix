@@ -3,8 +3,9 @@
  *
  * Tactical Doppler Weather Radar 4D Player & Reflectivity Scale HUD:
  * - Reflectivity dBZ gradient scale (5 - 65+ dBZ)
- * - 4D Time-lapse Radar Player: Animates 13 past radar frames from RainViewer
- * - Play / Pause, frame scrub bar, and UTC/TPE timestamp telemetry
+ * - 4D Time-lapse Radar Player: Animates past radar frames from RainViewer
+ * - 180-second automatic background polling engine for continuous Real-Time sync
+ * - Play / Pause, frame scrub bar, click-to-NOW snap, and UTC/TPE timestamp telemetry
  */
 
 export interface RadarFrame {
@@ -22,6 +23,7 @@ export class DopplerRadarLegend {
   private currentFrameIndex: number = 0;
   private isPlaying: boolean = false;
   private playTimer: any = null;
+  private pollTimer: any = null;
   private playSpeedMs: number = 800; // 800ms per frame
 
   constructor(options?: {
@@ -31,6 +33,11 @@ export class DopplerRadarLegend {
     this.onToggleRadar = options?.onToggleRadar;
     this.onFrameChange = options?.onFrameChange;
     this.fetchRadarFrames();
+
+    // 180-second (3-minute) continuous real-time sync polling
+    this.pollTimer = setInterval(() => {
+      this.fetchRadarFrames();
+    }, 180000);
   }
 
   public async fetchRadarFrames(): Promise<void> {
@@ -39,13 +46,21 @@ export class DopplerRadarLegend {
       if (res.ok) {
         const json = await res.json();
         if (json.radar && Array.isArray(json.radar.past)) {
+          const wasAtLatest =
+            this.frames.length === 0 || this.currentFrameIndex === this.frames.length - 1;
+
           this.frames = json.radar.past.map((f: any) => ({
             time: f.time,
             path: f.path,
           }));
+
           if (this.frames.length > 0) {
-            this.currentFrameIndex = this.frames.length - 1; // latest
-            this.updatePlayerUI();
+            if (wasAtLatest && !this.isPlaying) {
+              this.currentFrameIndex = this.frames.length - 1; // stay locked on latest real-time scan
+              this.applyCurrentFrame();
+            } else {
+              this.updatePlayerUI();
+            }
           }
         }
       }
@@ -72,10 +87,10 @@ export class DopplerRadarLegend {
       <!-- 4D Time-Lapse Player Controls -->
       <div class="radar-player-strip">
         <button class="radar-play-btn" id="radar-btn-play" title="Play / Pause Radar Loop">▶ PLAY</button>
-        <div class="radar-timeline-track" id="radar-timeline-track">
+        <div class="radar-timeline-track" id="radar-timeline-track" title="Click to scrub radar historical timeline">
           <div class="radar-timeline-bar" id="radar-timeline-progress" style="width: 100%;"></div>
         </div>
-        <span class="radar-frame-time" id="radar-frame-time">LATEST</span>
+        <span class="radar-frame-time" id="radar-frame-time" title="Click to return to latest real-time frame" style="cursor:pointer;">LATEST</span>
       </div>
 
       <!-- dBZ Color Scale Gradient -->
@@ -117,7 +132,7 @@ export class DopplerRadarLegend {
 
       <div class="radar-legend-telemetry">
         <span>SWEEP: <b style="color:var(--accent-cyan);">WMO COMPOSITE</b></span>
-        <span>OVERZOOM: <b style="color:var(--accent-emerald);">SMOOTH 4K</b></span>
+        <span>AUTO-SYNC: <b style="color:var(--accent-emerald);">● 180S REAL-TIME</b></span>
       </div>
     `;
 
@@ -144,6 +159,16 @@ export class DopplerRadarLegend {
       const pct = Math.max(0, Math.min(1, clickX / rect.width));
       this.currentFrameIndex = Math.floor(pct * (this.frames.length - 1));
       this.applyCurrentFrame();
+    });
+
+    // Snap back to latest frame when clicking the time badge
+    const timeBadge = el.querySelector('#radar-frame-time');
+    timeBadge?.addEventListener('click', () => {
+      this.pause();
+      if (this.frames.length > 0) {
+        this.currentFrameIndex = this.frames.length - 1;
+        this.applyCurrentFrame();
+      }
     });
   }
 
@@ -199,9 +224,11 @@ export class DopplerRadarLegend {
         timeZone: 'Asia/Taipei',
         hour: '2-digit',
         minute: '2-digit',
+        second: '2-digit',
         hour12: false,
       });
       timeEl.textContent = isLatest ? `${timeStr} (NOW)` : `${timeStr} TPE`;
+      timeEl.setAttribute('title', isLatest ? '目前為最新即時掃描' : '點擊返回最新即時掃描 (NOW)');
     }
 
     if (barEl) {
@@ -232,5 +259,17 @@ export class DopplerRadarLegend {
       this.show();
     }
     return this.isVisible;
+  }
+
+  public destroy(): void {
+    this.pause();
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
+    if (this.container) {
+      this.container.remove();
+      this.container = null;
+    }
   }
 }
