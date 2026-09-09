@@ -11,6 +11,7 @@ import { FlightWatchPanel, type FlightItem } from './components/FlightWatchPanel
 import { AiSitrepModal } from './components/AiSitrepModal';
 import { SearchBar, type SearchResult } from './components/SearchBar';
 import { MeasureTool, type MeasureResult } from './components/MeasureTool';
+import { DopplerRadarLegend } from './components/DopplerRadarLegend';
 import type { EarthquakeItem } from './globe/layers/EarthquakeLayer';
 import type { GeoIncident } from './data/incidents-news';
 
@@ -21,7 +22,7 @@ class TerraMatrixApp {
   private spaceTrackingPanel!: SpaceTrackingPanel;
   private satelliteCardModal?: SatelliteCardModal;
 
-  // Osiris Phase 2 Tactical Modules
+  // Osiris Phase 2 & 3 Tactical Modules
   private regionPresets!: RegionPresetsPanel;
   private intelFeedPanel!: IntelFeedPanel;
   private marketsPanel!: MarketsPanel;
@@ -29,6 +30,7 @@ class TerraMatrixApp {
   private aiSitrepModal!: AiSitrepModal;
   private searchBar!: SearchBar;
   private measureTool!: MeasureTool;
+  private dopplerLegend!: DopplerRadarLegend;
 
   private autoRotate = false;
 
@@ -114,10 +116,10 @@ class TerraMatrixApp {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="12 8 8 12 12 16 12 8"/></svg>
             RESET
           </button>
-          <div class="tpe-clock" style="display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:11px;">
-            <span id="zulu-clock" style="color:var(--text-muted);">ZULU 00:00:00 UTC</span>
-            <span style="color:var(--border-active);">|</span>
-            <span id="tpe-clock" style="color:var(--accent-emerald);font-weight:700;">0000-00-00 00:00:00 TPE</span>
+          <div class="tpe-clock">
+            <span id="zulu-clock" class="clock-zulu">ZULU 00:00:00 UTC</span>
+            <span class="clock-divider">|</span>
+            <span id="tpe-clock" class="clock-local">0000-00-00 00:00:00 TPE</span>
           </div>
         </div>
       </header>
@@ -137,9 +139,9 @@ class TerraMatrixApp {
               <span class="category-rail-icon">✈️</span>
               <span>AIR (7K+)</span>
             </button>
-            <button class="category-rail-btn active" id="cat-btn-sea" title="Strategic Maritime Corridors">
+            <button class="category-rail-btn active" id="cat-btn-sea" title="Strategic Maritime Corridors & Ocean Currents">
               <span class="category-rail-icon">🚢</span>
-              <span>SEA</span>
+              <span>SEA & CURR</span>
             </button>
             <button class="category-rail-btn active" id="cat-btn-space" title="Space Tracking & Orbiting Satellites">
               <span class="category-rail-icon">🛰️</span>
@@ -177,6 +179,7 @@ class TerraMatrixApp {
             <button class="tactical-rail-btn" id="rail-btn-sat" title="NASA/ArcGIS Satellite Earth">
               <span>🛰️</span> SAT
             </button>
+            <div class="tactical-rail-divider"></div>
             <button class="tactical-rail-btn" id="rail-btn-intel" title="Toggle Live Intel & SIGINT Feed">
               <span>🚨</span> INTEL FEED
             </button>
@@ -189,8 +192,18 @@ class TerraMatrixApp {
             <button class="tactical-rail-btn" id="rail-btn-measure" title="Geodesic Great-Circle Distance Ruler">
               <span>📐</span> MEASURE
             </button>
+            <button class="tactical-rail-btn active" id="rail-btn-radar" title="Toggle Weather Doppler Radar & dBZ Scale">
+              <span>📡</span> DOPPLER
+            </button>
+            <button class="tactical-rail-btn active" id="rail-btn-currents" title="Toggle Global Ocean Currents">
+              <span>🌊</span> CURRENTS
+            </button>
+            <button class="tactical-rail-btn active" id="rail-btn-mil-bases" title="Toggle Global Military Bases">
+              <span>🛡️</span> MIL BASES
+            </button>
+            <div class="tactical-rail-divider"></div>
             <button class="tactical-rail-btn active" id="rail-btn-sat-drawer" title="Toggle Space Tracking Drawer">
-              <span>📡</span> TRACKING
+              <span>🛰️</span> TRACKING
             </button>
             <button class="tactical-rail-btn active" id="rail-btn-iss-cam" title="Toggle 24/7 ISS Live Cam">
               <span>📹</span> ISS CAM
@@ -511,6 +524,25 @@ class TerraMatrixApp {
       btnMeasure.classList.toggle('active', active);
     });
 
+    const btnRadar = document.getElementById('rail-btn-radar');
+    btnRadar?.addEventListener('click', () => {
+      const isVis = this.dopplerLegend.toggle();
+      this.globeScene.toggleDopplerRadar(isVis);
+      btnRadar.classList.toggle('active', isVis);
+    });
+
+    const btnCurrents = document.getElementById('rail-btn-currents');
+    btnCurrents?.addEventListener('click', () => {
+      const active = btnCurrents.classList.toggle('active');
+      this.globeScene.toggleOceanCurrents(active);
+    });
+
+    const btnMilBases = document.getElementById('rail-btn-mil-bases');
+    btnMilBases?.addEventListener('click', () => {
+      const active = btnMilBases.classList.toggle('active');
+      this.globeScene.toggleMilitaryBases(active);
+    });
+
     btnSatDrawer?.addEventListener('click', () => {
       this.spaceTrackingPanel.toggle();
     });
@@ -617,6 +649,51 @@ class TerraMatrixApp {
       });
     }
 
+    // 10. Mount Doppler Radar Legend
+    this.dopplerLegend = new DopplerRadarLegend({
+      onToggleRadar: (en) => {
+        this.globeScene.toggleDopplerRadar(en);
+        const btn = document.getElementById('rail-btn-radar');
+        btn?.classList.toggle('active', en);
+      },
+    });
+    this.dopplerLegend.init(globeWrapper);
+
+    // 11. Wire callbacks for Military Bases & Ocean Currents
+    this.globeScene.onSelectMilitaryBase = (base: any) => {
+      this.showInfoCard({
+        badge: `BASE // ${base.branch} [${base.country}]`,
+        badgeClass: base.alliance === 'STRATEGIC_COMPETITOR' ? 'CRITICAL' : 'MONITOR',
+        title: base.name,
+        content: `
+          <div style="margin-bottom:4px;"><b style="color:var(--accent-cyan);">${base.status}</b></div>
+          <div><b>Runway:</b> ${base.runway}</div>
+          <div style="margin-top:3px;"><b>Stationed:</b> ${base.stationed}</div>
+          <div style="margin-top:4px;color:var(--text-muted);font-size:10.5px;">${base.significance}</div>
+        `,
+        actionLabel: 'FOCUS FACILITY',
+        onAction: () => {
+          const coords = base.coordinates || (base.geometry && base.geometry.coordinates);
+          if (coords) {
+            this.globeScene.focusCoordinates(coords[1], coords[0], 11, 45, 0);
+          }
+        },
+      });
+    };
+
+    this.globeScene.onSelectOceanCurrent = (curr: any) => {
+      this.showInfoCard({
+        badge: `HYDRO // ${curr.type} CURRENT`,
+        badgeClass: curr.type === 'WARM' ? 'ELEVATED' : 'MONITOR',
+        title: curr.name,
+        content: `
+          <div><b>Basin:</b> ${curr.basin}</div>
+          <div><b>Velocity:</b> <span style="color:var(--accent-emerald);font-weight:700;">${curr.speed}</span> | <b>Temp:</b> ${curr.temp}</div>
+          <div style="margin-top:4px;color:var(--text-muted);font-size:10.5px;">${curr.impact}</div>
+        `,
+      });
+    };
+
     // Update counts when satellites load
     setTimeout(() => {
       const counts = this.globeScene.getSatellitesCounts();
@@ -675,18 +752,23 @@ class TerraMatrixApp {
     const update = () => {
       const now = new Date();
       if (tpeClockEl) {
-        const tpeTime =
-          now.toLocaleString('en-US', {
-            timeZone: 'Asia/Taipei',
-            hour12: false,
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-          }) + ' TPE';
-        tpeClockEl.textContent = tpeTime;
+        const parts = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Taipei',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false,
+        }).formatToParts(now);
+        const y = parts.find((p) => p.type === 'year')?.value || '2026';
+        const m = parts.find((p) => p.type === 'month')?.value || '09';
+        const d = parts.find((p) => p.type === 'day')?.value || '09';
+        const h = parts.find((p) => p.type === 'hour')?.value || '00';
+        const min = parts.find((p) => p.type === 'minute')?.value || '00';
+        const s = parts.find((p) => p.type === 'second')?.value || '00';
+        tpeClockEl.textContent = `${y}-${m}-${d} ${h}:${min}:${s} TPE`;
       }
       if (zuluClockEl) {
         const zuluTime = now.toISOString().substring(11, 19) + ' UTC';

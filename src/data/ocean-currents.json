@@ -1,0 +1,382 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "curr-kuroshio",
+        "name": "Kuroshio Current (黑潮)",
+        "type": "WARM",
+        "speed": "1.5 - 2.5 m/s (3.0 - 4.9 kts)",
+        "temp": "24°C - 29°C",
+        "basin": "Western North Pacific",
+        "impact": "Second-strongest warm boundary current on Earth. Transports 50 million m³/s of warm tropical water past Taiwan, Ryukyu, and Japan. Crucial maritime navigation accelerator and primary driver of East Asian typhoon paths."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [125.0, 15.0],
+          [123.5, 19.5],
+          [122.5, 23.5],
+          [124.0, 26.5],
+          [128.0, 29.5],
+          [133.0, 32.5],
+          [139.0, 34.5],
+          [145.0, 36.0],
+          [155.0, 37.0],
+          [168.0, 38.0]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "curr-gulf-stream",
+        "name": "Gulf Stream (墨西哥灣暖流)",
+        "type": "WARM",
+        "speed": "2.0 - 2.8 m/s (3.9 - 5.4 kts)",
+        "temp": "25°C - 30°C",
+        "basin": "North Atlantic",
+        "impact": "World's most powerful ocean current. Originates in the Gulf of Mexico, passes Straits of Florida, hugs the US East Coast, and crosses toward Europe. Moderates Western European climate and impacts Atlantic shipping lanes."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-82.5, 24.5],
+          [-80.0, 27.5],
+          [-78.0, 31.0],
+          [-75.0, 34.5],
+          [-70.0, 38.0],
+          [-63.0, 40.5],
+          [-52.0, 42.0],
+          [-40.0, 44.5],
+          [-30.0, 48.0],
+          [-20.0, 52.0]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "curr-north-atlantic-drift",
+        "name": "North Atlantic Drift (北大西洋暖流)",
+        "type": "WARM",
+        "speed": "0.5 - 1.0 m/s (1.0 - 2.0 kts)",
+        "temp": "10°C - 16°C",
+        "basin": "Northeast Atlantic & Arctic",
+        "impact": "Northeastward continuation of the Gulf Stream. Keeps ports in the UK, Ireland, Norway, and western Russia (Murmansk) ice-free throughout harsh winters."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-20.0, 52.0],
+          [-12.0, 56.5],
+          [-5.0, 61.0],
+          [5.0, 66.0],
+          [15.0, 70.0],
+          [30.0, 72.0],
+          [40.0, 71.0]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "curr-california",
+        "name": "California Current (加利福尼亞寒流)",
+        "type": "COLD",
+        "speed": "0.3 - 0.7 m/s (0.6 - 1.4 kts)",
+        "temp": "12°C - 18°C",
+        "basin": "Eastern North Pacific",
+        "impact": "Flows southward along the western coast of North America from British Columbia to Baja California. Drives coastal upwelling, produces iconic coastal marine fog layers, and cools the Pacific coast."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-128.0, 48.0],
+          [-126.0, 43.0],
+          [-124.0, 38.0],
+          [-121.0, 34.0],
+          [-117.0, 28.0],
+          [-112.0, 23.0]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "curr-humboldt",
+        "name": "Humboldt / Peru Current (秘魯寒流)",
+        "type": "COLD",
+        "speed": "0.4 - 0.9 m/s (0.8 - 1.8 kts)",
+        "temp": "14°C - 19°C",
+        "basin": "Southeast Pacific",
+        "impact": "Major cold eastern boundary current flowing north along Chile and Peru. World's most productive marine upwelling system, generating 18-20% of global fish catch. Weakens drastically during El Niño events."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-76.0, -42.0],
+          [-74.0, -35.0],
+          [-72.5, -28.0],
+          [-73.0, -20.0],
+          [-77.0, -13.0],
+          [-82.0, -6.0],
+          [-86.0, -1.0]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "curr-agulhas",
+        "name": "Agulhas Current (厄加勒斯暖流)",
+        "type": "WARM",
+        "speed": "2.0 - 2.5 m/s (3.9 - 4.9 kts)",
+        "temp": "22°C - 27°C",
+        "basin": "Southwest Indian Ocean",
+        "impact": "Narrow, fast warm western boundary current flowing south along the coast of Mozambique and South Africa. Famous for generating deadly freak/rogue waves (up to 30m) when meeting Southern Ocean swell."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [40.0, -18.0],
+          [36.0, -24.0],
+          [32.0, -29.0],
+          [28.0, -33.0],
+          [23.0, -36.5],
+          [17.0, -38.0],
+          [21.0, -41.0]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "curr-benguela",
+        "name": "Benguela Current (本吉拉寒流)",
+        "type": "COLD",
+        "speed": "0.3 - 0.6 m/s (0.6 - 1.2 kts)",
+        "temp": "12°C - 17°C",
+        "basin": "South Atlantic",
+        "impact": "Flows northward along the western coast of South Africa and Namibia. Drives intense coastal upwelling and is responsible for creating the hyper-arid Namib Desert climate."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [16.0, -35.0],
+          [14.0, -29.0],
+          [12.5, -22.0],
+          [11.0, -15.0],
+          [9.0, -8.0]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "curr-canary",
+        "name": "Canary Current (加那利寒流)",
+        "type": "COLD",
+        "speed": "0.3 - 0.6 m/s (0.6 - 1.2 kts)",
+        "temp": "16°C - 22°C",
+        "basin": "Northeast Atlantic",
+        "impact": "Flows southward past the Iberian Peninsula and Northwest Africa to Senegal. Cools the coastal waters of Morocco and Western Sahara, feeding the Atlantic North Equatorial Current."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-10.0, 42.0],
+          [-12.0, 36.0],
+          [-15.0, 30.0],
+          [-18.0, 23.0],
+          [-20.0, 16.0],
+          [-23.0, 11.0]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "curr-brazil",
+        "name": "Brazil Current (巴西暖流)",
+        "type": "WARM",
+        "speed": "0.5 - 1.0 m/s (1.0 - 2.0 kts)",
+        "temp": "22°C - 27°C",
+        "basin": "Southwest Atlantic",
+        "impact": "Flows southward along the eastern coast of Brazil from Cape San Roque to the Río de la Plata. Meets the cold Malvinas Current at the dynamic Brazil-Malvinas Confluence."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-35.0, -8.0],
+          [-37.0, -14.0],
+          [-40.0, -21.0],
+          [-44.0, -26.0],
+          [-49.0, -32.0],
+          [-53.0, -38.0]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "curr-falkland",
+        "name": "Malvinas / Falkland Current (福克蘭寒流)",
+        "type": "COLD",
+        "speed": "0.5 - 1.2 m/s (1.0 - 2.3 kts)",
+        "temp": "4°C - 9°C",
+        "basin": "Southwest Atlantic",
+        "impact": "Northward-flowing sub-Antarctic current branching from the Antarctic Circumpolar Current past the Falkland Islands and Argentine Sea."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-62.0, -56.0],
+          [-58.0, -51.0],
+          [-55.0, -45.0],
+          [-53.0, -39.0]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "curr-eac",
+        "name": "East Australian Current (東澳暖流)",
+        "type": "WARM",
+        "speed": "1.0 - 2.0 m/s (2.0 - 3.9 kts)",
+        "temp": "21°C - 26°C",
+        "basin": "Southwest Pacific",
+        "impact": "Warm poleward western boundary current that transports warm tropical water from the Coral Sea down the east coast of Australia past Brisbane and Sydney."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [153.0, -18.0],
+          [155.0, -23.0],
+          [154.5, -28.0],
+          [153.0, -33.0],
+          [151.0, -38.0],
+          [149.0, -43.0]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "curr-oyashio",
+        "name": "Oyashio Current (親潮寒流)",
+        "type": "COLD",
+        "speed": "0.3 - 0.8 m/s (0.6 - 1.6 kts)",
+        "temp": "2°C - 8°C",
+        "basin": "Northwest Pacific",
+        "impact": "Sub-Arctic current flowing south from the Bering Sea and Sea of Okhotsk past Kuril Islands and Hokkaido. Collides with the warm Kuroshio, creating one of the world's most productive fishing grounds."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [162.0, 52.0],
+          [157.0, 48.0],
+          [151.0, 44.0],
+          [146.0, 40.0],
+          [143.0, 36.5]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "curr-acc-pacific",
+        "name": "Antarctic Circumpolar Current (南極繞極流)",
+        "type": "COLD",
+        "speed": "0.4 - 1.0 m/s (0.8 - 2.0 kts)",
+        "temp": "-1°C - 4°C",
+        "basin": "Southern Ocean",
+        "impact": "Largest and strongest ocean current system on Earth. Carries 130-140 million m³/s around Antarctica driven by powerful westerly winds. Major barrier preventing warm water from reaching the Antarctic ice sheet."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-140.0, -56.0],
+          [-110.0, -57.0],
+          [-80.0, -58.0],
+          [-65.0, -58.0],
+          [-40.0, -54.0],
+          [-10.0, -52.0],
+          [20.0, -51.0],
+          [60.0, -52.0],
+          [100.0, -54.0],
+          [140.0, -55.0],
+          [170.0, -56.0]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "curr-labrador",
+        "name": "Labrador Current (拉布拉多寒流)",
+        "type": "COLD",
+        "speed": "0.3 - 0.7 m/s (0.6 - 1.4 kts)",
+        "temp": "0°C - 5°C",
+        "basin": "Northwest Atlantic",
+        "impact": "Cold Arctic current originating in Baffin Bay. Transports Arctic icebergs south into the North Atlantic shipping lanes around Newfoundland (historical site of Titanic disaster)."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-62.0, 60.0],
+          [-58.0, 56.0],
+          [-54.0, 52.0],
+          [-50.0, 47.0],
+          [-48.0, 42.0]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "curr-taiwan-strait",
+        "name": "Taiwan Strait Current (台灣海峽洋流系)",
+        "type": "WARM",
+        "speed": "0.8 - 1.8 m/s (1.6 - 3.5 kts)",
+        "temp": "22°C - 28°C",
+        "basin": "Taiwan Strait / East China Sea",
+        "impact": "Monsoon-controlled channel flow. During summer, strong warm South China Sea water pushes north through the strait into the East China Sea; in winter, cold Zhe-Min coastal current flows south along Fujian coast while Kuroshio branch enters Penghu channel."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [119.0, 22.0],
+          [119.5, 23.5],
+          [120.0, 24.5],
+          [120.8, 25.5],
+          [121.8, 26.5]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "curr-somali",
+        "name": "Somali Current (索馬利亞季風洋流)",
+        "type": "WARM",
+        "speed": "1.5 - 3.5 m/s (3.0 - 6.8 kts)",
+        "temp": "18°C - 27°C",
+        "basin": "Western Indian Ocean",
+        "impact": "Seasonally reversing boundary current off the Horn of Africa. Driven by southwest monsoon in summer (flows rapidly north with intense upwelling at 7 kts) and northeast monsoon in winter (flows south)."
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [42.0, -3.0],
+          [45.0, 2.0],
+          [48.0, 6.0],
+          [51.5, 10.5],
+          [54.0, 13.0]
+        ]
+      }
+    }
+  ]
+}

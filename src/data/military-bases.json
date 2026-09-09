@@ -1,0 +1,453 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-yokosuka",
+        "name": "Yokosuka Naval Base (橫須賀海軍基地)",
+        "code": "CFAY",
+        "country": "United States / Japan",
+        "branch": "NAVY",
+        "alliance": "US_NATO",
+        "status": "ACTIVE // DEFCON 4",
+        "runway": "Heliport (4 pads), 13 Drydocks (Drydock 6 fits Supercarriers)",
+        "stationed": "HQ US 7th Fleet, Carrier Strike Group 5 (USS George Washington CVN-73), Destroyer Squadron 15",
+        "significance": "Largest and most strategically vital forward US naval installation in the Western Pacific, projecting air and carrier strike capabilities across East Asia."
+      },
+      "geometry": { "type": "Point", "coordinates": [139.669, 35.291] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-kadena",
+        "name": "Kadena Air Base (嘉手納空軍基地)",
+        "code": "RODN",
+        "country": "United States / Japan",
+        "branch": "AIR_FORCE",
+        "alliance": "US_NATO",
+        "status": "ACTIVE // READINESS ALPHA",
+        "runway": "12,100 ft (3,688 m) & 12,100 ft Dual Heavy Runways",
+        "stationed": "18th Wing, F-15EX / F-22A rotational fighters, KC-135 Stratotanker, E-3 Sentry AWACS, RC-135 Rivet Joint",
+        "significance": "Known as the 'Keystone of the Pacific', Kadena is the premier forward hub for air dominance, electronic reconnaissance, and aerial refueling across the Taiwan Strait and East China Sea."
+      },
+      "geometry": { "type": "Point", "coordinates": [127.767, 26.355] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-andersen",
+        "name": "Andersen Air Force Base (關島安德森空軍基地)",
+        "code": "PGUA",
+        "country": "United States",
+        "branch": "AIR_FORCE",
+        "alliance": "US_NATO",
+        "status": "ACTIVE // STRATCOM BOMBER HUB",
+        "runway": "11,185 ft (3,409 m) & 10,558 ft (3,218 m) Parallel Runways",
+        "stationed": "36th Wing, Continuous Bomber Task Force (B-52H, B-1B, B-2A), RQ-4 Global Hawk UAVs",
+        "significance": "Cornerstone of US Indo-Pacific Strategy second-island-chain power projection, capable of sustaining massive strategic bomber operations across the Western Pacific."
+      },
+      "geometry": { "type": "Point", "coordinates": [144.924, 13.584] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-zuoying",
+        "name": "Zuoying Naval Base (海軍左營軍港司令部)",
+        "code": "TW-ZY",
+        "country": "Taiwan (ROC)",
+        "branch": "NAVY",
+        "alliance": "INDO_PACIFIC_ALLIED",
+        "status": "COMBAT READY // DEFCON 3 ALERT",
+        "runway": "Dedicated Naval Deepwater Pier System & Heliport",
+        "stationed": "ROC Navy Fleet Command, 124th Flotilla (Kang Ding-class Frigates), 192nd Underwater Fleet",
+        "significance": "Primary operational homeport of the Republic of China Navy, anchoring southern Taiwan Strait maritime defense, anti-submarine warfare, and sealane protection."
+      },
+      "geometry": { "type": "Point", "coordinates": [120.278, 22.695] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-hsinchu",
+        "name": "Hsinchu Air Base (空軍新竹基地)",
+        "code": "RCPO",
+        "country": "Taiwan (ROC)",
+        "branch": "AIR_FORCE",
+        "alliance": "INDO_PACIFIC_ALLIED",
+        "status": "COMBAT READY // RAPID SCRAMBLE 6MIN",
+        "runway": "12,000 ft (3,658 m) All-Weather Concrete",
+        "stationed": "2nd Tactical Fighter Wing (Mirage 2000-5Ei/Di Interceptors), Sky Bow III SAM Battery",
+        "significance": "Closest ROC airbase to mainland China (~140 km across strait), maintaining continuous 6-minute rapid scramble air superiority alert over northern Taiwan."
+      },
+      "geometry": { "type": "Point", "coordinates": [120.941, 24.818] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-leshan",
+        "name": "Leshan Early Warning Radar (樂山長程早期預警雷達站)",
+        "code": "PAVE-PAWS-TW",
+        "country": "Taiwan (ROC)",
+        "branch": "RADAR",
+        "alliance": "INDO_PACIFIC_ALLIED",
+        "status": "ACTIVE // 360° CONTINUOUS SCAN",
+        "runway": "Mountain Peak Hardened Helipad (Elevation 2,620m)",
+        "stationed": "Combat Air Control Center, AN/FPS-115 PAVE PAWS Phased Array Radar (Raytheon)",
+        "significance": "Provides real-time 3D ballistic missile detection, tracking, and cueing up to 5,000 km range, tracking PLARF ballistic missile launches into the deep interior of Asia."
+      },
+      "geometry": { "type": "Point", "coordinates": [121.025, 24.498] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-jiashan",
+        "name": "Hualien Jiashan Underground Base (花蓮佳山地下戰略空軍基地)",
+        "code": "RCJH",
+        "country": "Taiwan (ROC)",
+        "branch": "AIR_FORCE",
+        "alliance": "INDO_PACIFIC_ALLIED",
+        "status": "SECURE // TUNNEL COMPLEX DEFENSE",
+        "runway": "9,800 ft (2,987 m) Highway Interlink & Deep Mountain Tunnels",
+        "stationed": "5th Tactical Fighter Wing (F-16V Viper), Underground Hardened Aircraft Shelters (200+ jets capacity)",
+        "significance": "Taiwan's most heavily fortified military facility, excavated deep into the Central Mountain Range to preserve fighter wings against massive initial missile barrages."
+      },
+      "geometry": { "type": "Point", "coordinates": [121.618, 24.025] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-chiayi",
+        "name": "Chiayi Air Base (空軍嘉義基地)",
+        "code": "RCKU",
+        "country": "Taiwan (ROC)",
+        "branch": "AIR_FORCE",
+        "alliance": "INDO_PACIFIC_ALLIED",
+        "status": "COMBAT READY // SCRAMBLE PATROL",
+        "runway": "10,000 ft (3,048 m) Concrete",
+        "stationed": "4th Tactical Fighter Wing (F-16V Block 20 with APG-83 AESA Radar & AIM-120C-7 AMRAAM)",
+        "significance": "First fully upgraded F-16V wing in the world, holding central Taiwan maritime approach defense and conducting routine ADIZ interception sorties."
+      },
+      "geometry": { "type": "Point", "coordinates": [120.393, 23.461] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-suao",
+        "name": "Suao Naval Base (海軍蘇澳北方澳軍港)",
+        "code": "TW-SA",
+        "country": "Taiwan (ROC)",
+        "branch": "NAVY",
+        "alliance": "INDO_PACIFIC_ALLIED",
+        "status": "ACTIVE // EASTERN FLANK PATROL",
+        "runway": "Deepwater Anchorage & Mountain Tunnel Berths",
+        "stationed": "168th Flotilla (Kee Lung / Kidd-class Guided Missile Destroyers with SM-2MR)",
+        "significance": "Commands Taiwan's eastern Pacific approaches and sea lines of communication linking to Yonaguni Island and southern Japan."
+      },
+      "geometry": { "type": "Point", "coordinates": [121.868, 24.595] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-humphreys",
+        "name": "Camp Humphreys (韓國韓福瑞斯營)",
+        "code": "USAG-H",
+        "country": "United States / South Korea",
+        "branch": "JOINT",
+        "alliance": "US_NATO",
+        "status": "ACTIVE // COMBINED FORCES HQ",
+        "runway": "7,124 ft (2,171 m) Desiderio Army Airfield (A-2) Runway",
+        "stationed": "HQ United Nations Command, ROK-US Combined Forces Command, Eighth US Army, 2nd Infantry Division",
+        "significance": "Largest overseas US military base in the world (3,450 acres), serving as the core nerve center for joint defensive operations on the Korean Peninsula."
+      },
+      "geometry": { "type": "Point", "coordinates": [127.027, 36.962] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-osan",
+        "name": "Osan Air Base (烏山空軍基地)",
+        "code": "RKSO",
+        "country": "United States / South Korea",
+        "branch": "AIR_FORCE",
+        "alliance": "US_NATO",
+        "status": "ACTIVE // DEFCON 4",
+        "runway": "9,000 ft (2,743 m) All-Weather Runway",
+        "stationed": "51st Fighter Wing (F-16C/D, A-10C Thunderbolt II), 5th Reconnaissance Squadron (U-2S Dragon Lady)",
+        "significance": "Most forward-deployed air base in Korea (~77 km from DMZ), maintaining high-altitude U-2 strategic reconnaissance over North Korea."
+      },
+      "geometry": { "type": "Point", "coordinates": [127.030, 37.090] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-misawa",
+        "name": "Misawa Air Base (三澤空軍基地)",
+        "code": "RJSM",
+        "country": "United States / Japan",
+        "branch": "AIR_FORCE",
+        "alliance": "US_NATO",
+        "status": "ACTIVE // NORTH PACIFIC SHIELD",
+        "runway": "10,000 ft (3,048 m) Runway",
+        "stationed": "35th Fighter Wing (F-16CM Wild Weasel / SEAD), JASDF 3rd Air Wing (F-35A Lightning II)",
+        "significance": "Dual US-JASDF base in northern Honshu specializing in Suppression of Enemy Air Defenses (SEAD) and monitoring the Sea of Okhotsk / Russian Far East."
+      },
+      "geometry": { "type": "Point", "coordinates": [141.368, 40.703] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-sasebo",
+        "name": "Sasebo Naval Base (佐世保海軍基地)",
+        "code": "CFAS",
+        "country": "United States / Japan",
+        "branch": "NAVY",
+        "alliance": "US_NATO",
+        "status": "ACTIVE // AMPHIBIOUS FORWARD PORT",
+        "runway": "Deepwater Pier Facilities & Ammo Depot",
+        "stationed": "Amphibious Squadron 11 (USS America LHA-6 Amphibious Ready Group, USS Green Bay LPD-20)",
+        "significance": "Primary forward staging port for US Marine Expeditionary Units and amphibious rapid response across the East China Sea and Korea."
+      },
+      "geometry": { "type": "Point", "coordinates": [129.714, 33.161] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-ramstein",
+        "name": "Ramstein Air Base (拉姆施泰因空軍基地)",
+        "code": "ETAR",
+        "country": "United States / Germany",
+        "branch": "AIR_FORCE",
+        "alliance": "US_NATO",
+        "status": "ACTIVE // NATO AIR COMMAND HQ",
+        "runway": "10,499 ft (3,200 m) & 9,186 ft (2,800 m) Parallel Runways",
+        "stationed": "HQ Allied Air Command (AIRCOM), HQ US Air Forces in Europe – Air Forces Africa (USAFE-AFAFRICA), 86th Airlift Wing",
+        "significance": "Nerve center for NATO air defense across Europe and central global airlift gateway connecting the continental US with Europe, Africa, and the Middle East."
+      },
+      "geometry": { "type": "Point", "coordinates": [7.600, 49.437] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-lakenheath",
+        "name": "RAF Lakenheath (英國雷肯希思空軍基地)",
+        "code": "EGUL",
+        "country": "United States / United Kingdom",
+        "branch": "AIR_FORCE",
+        "alliance": "US_NATO",
+        "status": "ACTIVE // 5TH GEN STEALTH HUB",
+        "runway": "9,000 ft (2,743 m) Asphalt/Concrete Runway",
+        "stationed": "48th Fighter Wing ('Statue of Liberty Wing'), 493rd & 495th Fighter Squadrons (F-35A Lightning II)",
+        "significance": "First permanent forward operating base for US Air Force F-35A 5th-generation stealth fighters in the European theater."
+      },
+      "geometry": { "type": "Point", "coordinates": [0.560, 52.409] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-rota",
+        "name": "Rota Naval Station (西班牙羅塔海軍基地)",
+        "code": "NAVSTA-ROTA",
+        "country": "United States / Spain",
+        "branch": "NAVY",
+        "alliance": "US_NATO",
+        "status": "ACTIVE // AEGIS BMD FORWARD HUB",
+        "runway": "12,100 ft (3,688 m) Airfield & Deepwater Port",
+        "stationed": "Destroyer Squadron 60 (USS Arleigh Burke, USS Roosevelt Aegis BMD Destroyers)",
+        "significance": "Key gateway to the Mediterranean, hosting forward-deployed Aegis Ballistic Missile Defense destroyers safeguarding southern Europe."
+      },
+      "geometry": { "type": "Point", "coordinates": [-6.349, 36.645] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-al-udeid",
+        "name": "Al Udeid Air Base (卡達烏代德空軍基地)",
+        "code": "OTBH",
+        "country": "United States / Qatar",
+        "branch": "AIR_FORCE",
+        "alliance": "US_NATO",
+        "status": "ACTIVE // CENTCOM AIR HQ",
+        "runway": "12,303 ft (3,750 m) Dual Hardened Runways",
+        "stationed": "HQ US Air Forces Central (AFCENT), Combined Air Operations Center (CAOC), 379th Air Expeditionary Wing",
+        "significance": "Largest US military installation in the Middle East, commanding air and space operations from Egypt to Afghanistan."
+      },
+      "geometry": { "type": "Point", "coordinates": [51.314, 25.117] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-nsa-bahrain",
+        "name": "NSA Bahrain (巴林海軍支援處 / 第五艦隊司令部)",
+        "code": "NSA-BAHRAIN",
+        "country": "United States / Bahrain",
+        "branch": "NAVY",
+        "alliance": "US_NATO",
+        "status": "ACTIVE // 5TH FLEET COMMAND",
+        "runway": "Mina Salman Deepwater Naval Pier Facility",
+        "stationed": "HQ US Naval Forces Central Command (NAVCENT), HQ US 5th Fleet, Combined Maritime Forces (CMF)",
+        "significance": "Commands all US naval operations in the Persian Gulf, Strait of Hormuz, Arabian Sea, and Red Sea, ensuring international commercial energy transit."
+      },
+      "geometry": { "type": "Point", "coordinates": [50.606, 26.208] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-diego-garcia",
+        "name": "Camp Thunder Cove (狄耶哥加西亞戰略基地)",
+        "code": "FJDG",
+        "country": "United States / United Kingdom",
+        "branch": "JOINT",
+        "alliance": "US_NATO",
+        "status": "ACTIVE // STRATCOM BOMBER & SSGN",
+        "runway": "12,000 ft (3,658 m) All-Weather Heavy Bomber Runway",
+        "stationed": "B-2A Stealth Bomber forward shelters, Maritime Prepositioning Ships (MPSRON 2), SSGN Submarine tender berths",
+        "significance": "Isolated British atoll in the central Indian Ocean providing unassailable staging for long-range stealth strikes into the Middle East, South Asia, and Africa."
+      },
+      "geometry": { "type": "Point", "coordinates": [72.411, -7.313] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-norfolk",
+        "name": "Naval Station Norfolk (諾福克海軍基地)",
+        "code": "KNGU",
+        "country": "United States",
+        "branch": "NAVY",
+        "alliance": "US_NATO",
+        "status": "ACTIVE // WORLD'S LARGEST NAVAL BASE",
+        "runway": "8,000 ft (2,438 m) Chambers Field Runway, 14 Piers (75 ships capacity)",
+        "stationed": "HQ US Fleet Forces Command, HQ NATO Joint Force Command Norfolk, Carrier Strike Group 2, 8, 10, 12",
+        "significance": "The epicenter of US Atlantic naval strength, home to 5 Nimitz/Ford-class nuclear aircraft carriers and 75 surface combatants."
+      },
+      "geometry": { "type": "Point", "coordinates": [-76.301, 36.945] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-pearl-harbor",
+        "name": "Joint Base Pearl Harbor-Hickam (珍珠港-希卡姆聯合基地)",
+        "code": "PHNL",
+        "country": "United States",
+        "branch": "JOINT",
+        "alliance": "US_NATO",
+        "status": "ACTIVE // PACIFIC FLEET COMMAND",
+        "runway": "12,000 ft (3,658 m) Hickam Runways, 4 Drydocks",
+        "stationed": "HQ US Pacific Fleet, HQ Pacific Air Forces (PACAF), Submarine Force Pacific, 15th Wing (C-17 Globemaster, F-22A Raptor)",
+        "significance": "Headquarters of the United States Pacific Fleet, controlling all US naval assets from the US West Coast to the Indian Ocean."
+      },
+      "geometry": { "type": "Point", "coordinates": [-157.949, 21.349] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-whiteman",
+        "name": "Whiteman Air Force Base (懷特曼空軍基地)",
+        "code": "KSZL",
+        "country": "United States",
+        "branch": "AIR_FORCE",
+        "alliance": "US_NATO",
+        "status": "ACTIVE // NUCLEAR TRIAD AIR LEG",
+        "runway": "12,400 ft (3,780 m) Heavy Runway",
+        "stationed": "509th Bomb Wing, 131st Bomb Wing (Sole operational home of B-2 Spirit Stealth Bombers, B-21 Raider testbed)",
+        "significance": "Home of America's B-2 Spirit stealth bomber fleet, capable of delivering conventional and B61-12 thermonuclear ordnance anywhere on the globe non-stop."
+      },
+      "geometry": { "type": "Point", "coordinates": [-93.548, 38.730] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-pine-gap",
+        "name": "Pine Gap Joint Defense Facility (松樹谷防衛設施)",
+        "code": "PINE-GAP",
+        "country": "United States / Australia",
+        "branch": "RADAR",
+        "alliance": "US_NATO",
+        "status": "ACTIVE // TOP SECRET SIGINT",
+        "runway": "Hardened Radome Array (38 radomes) & Remote Helipads",
+        "stationed": "CIA / NSA / Australian Defence Signals Directorate, Satellite Ground Terminals (ORION, MENTOR geostationary SIGINT)",
+        "significance": "One of the most critical intelligence collection sites in the Western world, intercepting ballistic missile telemetry, tactical comms, and radar emissions across Asia."
+      },
+      "geometry": { "type": "Point", "coordinates": [133.737, -23.799] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-pituffik",
+        "name": "Pituffik Space Base / Thule (格陵蘭圖勒太空基地)",
+        "code": "BGTL",
+        "country": "United States / Greenland",
+        "branch": "SPACE_FORCE",
+        "alliance": "US_NATO",
+        "status": "ACTIVE // POLAR ICBM WARNING",
+        "runway": "10,000 ft (3,048 m) Arctic Asphalt Runway",
+        "stationed": "12th Space Warning Squadron (AN/FPS-132 Upgraded Early Warning Radar - UEWR)",
+        "significance": "Northernmost US military installation (750 miles north of the Arctic Circle), providing early warning of ICBM launches coming over the North Pole."
+      },
+      "geometry": { "type": "Point", "coordinates": [-68.703, 76.531] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-changi",
+        "name": "Changi Naval Base (新加坡樟宜海軍基地)",
+        "code": "SG-CHANGI",
+        "country": "Singapore / United States",
+        "branch": "NAVY",
+        "alliance": "INDO_PACIFIC_ALLIED",
+        "status": "ACTIVE // MALACCA STRAIT GATEWAY",
+        "runway": "Deepwater carrier-capable piers (6.2 km wharves)",
+        "stationed": "Republic of Singapore Navy, US Navy Task Force 73, littoral combat ship (LCS) rotational deployments",
+        "significance": "Guards the eastern entrance to the Strait of Malacca; specifically built with berths to support US nuclear supercarriers operating in Southeast Asia."
+      },
+      "geometry": { "type": "Point", "coordinates": [104.032, 1.320] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-subic",
+        "name": "Subic Bay Naval Base (菲律賓蘇比克灣軍事基地)",
+        "code": "PH-SUBIC",
+        "country": "Philippines / United States",
+        "branch": "NAVY",
+        "alliance": "INDO_PACIFIC_ALLIED",
+        "status": "ACTIVE // EDCA ACCESS AGREEMENT",
+        "runway": "Deepwater natural harbor & Subic Bay International Airport (9,000 ft runway)",
+        "stationed": "Philippine Navy Fleet Command forward patrol, US Indo-Pacific Command rotational surveillance detachments",
+        "significance": "Dominates the eastern approaches to the South China Sea, located just 140 nautical miles east of Scarborough Shoal."
+      },
+      "geometry": { "type": "Point", "coordinates": [120.278, 14.821] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-sanya",
+        "name": "Yalong Bay / Sanya SSBN Naval Base (三亞亞龍灣核潛艇基地)",
+        "code": "PLAN-SANYA",
+        "country": "China (PRC)",
+        "branch": "NAVY",
+        "alliance": "STRATEGIC_COMPETITOR",
+        "status": "ACTIVE // NUCLEAR DETERRENCE PATROL",
+        "runway": "Deepwater Submarine Tunnels & Dual Aircraft Carrier Piers",
+        "stationed": "PLAN South Sea Fleet, Submarine Flotilla 32 (Type 094 Jin-class SSBN, Type 093 Shang-class SSN), Carrier Shandong (17)",
+        "significance": "China's premier underground submarine fortress carved into coastal mountains, allowing nuclear ballistic missile submarines to submerge directly into deep South China Sea trenches."
+      },
+      "geometry": { "type": "Point", "coordinates": [109.680, 18.210] }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "id": "mil-sevastopol",
+        "name": "Sevastopol Naval Base (塞瓦斯托波爾海軍基地)",
+        "code": "RU-SEV",
+        "country": "Russia",
+        "branch": "NAVY",
+        "alliance": "STRATEGIC_COMPETITOR",
+        "status": "COMBAT ZONE // AIR DEFENSE DISPERSED",
+        "runway": "Natural deepwater sheltered bays & drydock facilities",
+        "stationed": "Russian Navy Black Sea Fleet (Admiral Grigorovich-class Frigates, Kilo-class Project 636.3 Submarines)",
+        "significance": "Historical strategic bastion in Crimea controlling maritime dominance over the Black Sea, heavily contested by maritime drone strikes."
+      },
+      "geometry": { "type": "Point", "coordinates": [33.535, 44.616] }
+    }
+  ]
+}

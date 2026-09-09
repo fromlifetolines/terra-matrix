@@ -3,6 +3,8 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import type { EarthquakeItem } from './layers/EarthquakeLayer';
 import { CctvPreviewsManager } from './CctvPreviews';
 import { createSatelliteLayer, parseColor, type SatPoint } from './layers/SatelliteLayer';
+import oceanCurrentsGeoJson from '../data/ocean-currents.json';
+import militaryBasesGeoJson from '../data/military-bases.json';
 
 export interface GlobeLayerState {
   cctv: boolean;
@@ -19,6 +21,9 @@ export interface GlobeLayerState {
   sat_earth: boolean;
   sat_science: boolean;
   weather: boolean;
+  ocean_currents: boolean;
+  doppler_radar: boolean;
+  military_bases: boolean;
 }
 
 export class GlobeScene {
@@ -36,6 +41,8 @@ export class GlobeScene {
   public onSelectFlight?: (flight: any) => void;
   public onSelectSatellite?: (sat: any) => void;
   public onSelectWeather?: (weather: any) => void;
+  public onSelectMilitaryBase?: (base: any) => void;
+  public onSelectOceanCurrent?: (curr: any) => void;
 
   private currentStyle: 'dark' | 'sat' = 'dark';
   private currentProjection: 'globe' | 'mercator' = 'globe';
@@ -69,6 +76,9 @@ export class GlobeScene {
     sat_earth: true,
     sat_science: true,
     weather: true,
+    ocean_currents: true,
+    doppler_radar: true,
+    military_bases: true,
   };
 
   constructor(container: HTMLElement) {
@@ -108,6 +118,9 @@ export class GlobeScene {
       this.initRealFlightsLayer();
       this.initSatellites3DLayer();
       this.initWeatherLayer();
+      this.initOceanCurrentsLayer();
+      this.initDopplerRadarLayer();
+      this.initMilitaryBasesLayer();
 
       // Initialize floating CCTV preview cards
       this.previewManager = new CctvPreviewsManager(this.map, this.container, (cam) => {
@@ -572,42 +585,244 @@ export class GlobeScene {
     }
   }
 
-  private createPlaneIcon(id: string, color: string, size: number = 24): void {
+  private createHDPlaneIcon(id: string, color: string, type: 'airliner' | 'fighter' | 'bizjet'): void {
     if (this.map.hasImage(id)) return;
+    const size = 128;
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d')!;
-    const cx = size / 2, cy = size / 2;
+
+    ctx.clearRect(0, 0, size, size);
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    if (type === 'fighter') {
+      // Modern 5th-gen supersonic stealth fighter (F-22/F-35 silhouette)
+      ctx.beginPath();
+      ctx.moveTo(64, 14); // Nose radome
+      ctx.lineTo(70, 32); // Right chine
+      ctx.lineTo(72, 46); // Right wing root
+      ctx.lineTo(114, 76); // Right wingtip
+      ctx.lineTo(112, 82);
+      ctx.lineTo(76, 76); // Trailing edge
+      ctx.lineTo(76, 92);
+      ctx.lineTo(96, 114); // Right stabilator
+      ctx.lineTo(84, 116);
+      ctx.lineTo(72, 102);
+      ctx.lineTo(68, 110); // Right nozzle
+      ctx.lineTo(64, 106); // Center notch
+      ctx.lineTo(60, 110); // Left nozzle
+      ctx.lineTo(56, 102);
+      ctx.lineTo(44, 116);
+      ctx.lineTo(32, 114); // Left stabilator
+      ctx.lineTo(52, 92);
+      ctx.lineTo(52, 76);
+      ctx.lineTo(16, 82);
+      ctx.lineTo(14, 76); // Left wingtip
+      ctx.lineTo(56, 46);
+      ctx.lineTo(58, 32); // Left chine
+      ctx.closePath();
+    } else if (type === 'bizjet') {
+      // Sleek business jet (Gulfstream/Learjet with rear engines & T-tail)
+      ctx.beginPath();
+      ctx.moveTo(64, 16);
+      ctx.lineTo(68, 44);
+      ctx.lineTo(116, 68);
+      ctx.lineTo(115, 73);
+      ctx.lineTo(70, 68);
+      ctx.lineTo(76, 76);
+      ctx.lineTo(76, 92);
+      ctx.lineTo(69, 93);
+      ctx.lineTo(69, 102);
+      ctx.lineTo(92, 112);
+      ctx.lineTo(90, 117);
+      ctx.lineTo(65, 112);
+      ctx.lineTo(64, 118);
+      ctx.lineTo(63, 112);
+      ctx.lineTo(38, 117);
+      ctx.lineTo(36, 112);
+      ctx.lineTo(59, 102);
+      ctx.lineTo(59, 93);
+      ctx.lineTo(52, 92);
+      ctx.lineTo(52, 76);
+      ctx.lineTo(58, 68);
+      ctx.lineTo(13, 73);
+      ctx.lineTo(12, 68);
+      ctx.lineTo(60, 44);
+      ctx.closePath();
+    } else {
+      // Realistic Boeing/Airbus commercial airliner (swept wings, dual engines, stabilizers)
+      ctx.beginPath();
+      ctx.moveTo(64, 12);
+      ctx.bezierCurveTo(67, 12, 70, 18, 70, 30);
+      ctx.lineTo(70, 48);
+      ctx.lineTo(76, 50);
+      ctx.lineTo(118, 72);
+      ctx.lineTo(117, 78);
+      ctx.lineTo(74, 68);
+      ctx.lineTo(72, 96);
+      ctx.lineTo(94, 110);
+      ctx.lineTo(91, 115);
+      ctx.lineTo(68, 107);
+      ctx.lineTo(64, 118);
+      ctx.lineTo(60, 107);
+      ctx.lineTo(37, 115);
+      ctx.lineTo(34, 110);
+      ctx.lineTo(56, 96);
+      ctx.lineTo(54, 68);
+      ctx.lineTo(11, 78);
+      ctx.lineTo(10, 72);
+      ctx.lineTo(52, 50);
+      ctx.lineTo(58, 48);
+      ctx.lineTo(58, 30);
+      ctx.bezierCurveTo(58, 18, 61, 12, 64, 12);
+      ctx.closePath();
+    }
+
+    // Outer dark glow/halo for maximum high contrast against land & clouds
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 6;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 1;
+
     ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy - size * 0.4);
-    ctx.lineTo(cx - size * 0.12, cy + size * 0.1);
-    ctx.lineTo(cx - size * 0.4, cy + size * 0.2);
-    ctx.lineTo(cx - size * 0.4, cy + size * 0.3);
-    ctx.lineTo(cx - size * 0.12, cy + size * 0.15);
-    ctx.lineTo(cx, cy + size * 0.35);
-    ctx.lineTo(cx + size * 0.12, cy + size * 0.15);
-    ctx.lineTo(cx + size * 0.4, cy + size * 0.3);
-    ctx.lineTo(cx + size * 0.4, cy + size * 0.2);
-    ctx.lineTo(cx + size * 0.12, cy + size * 0.1);
-    ctx.closePath();
     ctx.fill();
-    this.map.addImage(id, {
-      width: size,
-      height: size,
-      data: new Uint8Array(ctx.getImageData(0, 0, size, size).data),
-    });
+
+    // Reset shadow
+    ctx.shadowBlur = 0;
+
+    // Dark crisp edge line
+    ctx.strokeStyle = '#05070d';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // For commercial airliner, also draw the dual wing engine pods
+    if (type === 'airliner') {
+      ctx.fillStyle = color;
+      ctx.strokeStyle = '#05070d';
+      ctx.lineWidth = 2;
+
+      // Right engine pod
+      ctx.beginPath();
+      ctx.ellipse(86, 62, 4, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Left engine pod
+      ctx.beginPath();
+      ctx.ellipse(42, 62, 4, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    this.map.addImage(id, ctx.getImageData(0, 0, size, size), { pixelRatio: 2 });
+  }
+
+  private createMilBaseIcon(id: string, color: string, type: 'air' | 'navy' | 'radar' | 'joint'): void {
+    if (this.map.hasImage(id)) return;
+    const size = 64;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d')!;
+
+    ctx.clearRect(0, 0, size, size);
+
+    // Outer tactical circular badge with dark background
+    ctx.beginPath();
+    ctx.arc(32, 32, 28, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(10, 12, 18, 0.92)';
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.fillStyle = color;
+    ctx.strokeStyle = color;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if (type === 'air') {
+      // Swept tactical wing symbol
+      ctx.beginPath();
+      ctx.moveTo(32, 16);
+      ctx.lineTo(36, 26);
+      ctx.lineTo(50, 36);
+      ctx.lineTo(36, 36);
+      ctx.lineTo(35, 46);
+      ctx.lineTo(42, 49);
+      ctx.lineTo(32, 47);
+      ctx.lineTo(22, 49);
+      ctx.lineTo(29, 46);
+      ctx.lineTo(28, 36);
+      ctx.lineTo(14, 36);
+      ctx.lineTo(28, 26);
+      ctx.closePath();
+      ctx.fill();
+    } else if (type === 'navy') {
+      // Naval anchor symbol
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(32, 22, 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(32, 26);
+      ctx.lineTo(32, 46);
+      ctx.moveTo(24, 30);
+      ctx.lineTo(40, 30);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(32, 38, 11, 0.2 * Math.PI, 0.8 * Math.PI, false);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(21, 41);
+      ctx.lineTo(21, 37);
+      ctx.moveTo(43, 41);
+      ctx.lineTo(43, 37);
+      ctx.stroke();
+    } else if (type === 'radar') {
+      // Phased array radar dish with wave arcs
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(28, 36, 12, 1.4 * Math.PI, 1.95 * Math.PI);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(28, 36);
+      ctx.lineTo(40, 24);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(40, 24, 6, -0.3 * Math.PI, 0.3 * Math.PI);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(40, 24, 11, -0.35 * Math.PI, 0.35 * Math.PI);
+      ctx.stroke();
+    } else {
+      // 4-point tactical star / Joint HQ
+      ctx.beginPath();
+      ctx.moveTo(32, 16);
+      ctx.lineTo(35, 29);
+      ctx.lineTo(48, 32);
+      ctx.lineTo(35, 35);
+      ctx.lineTo(32, 48);
+      ctx.lineTo(29, 35);
+      ctx.lineTo(16, 32);
+      ctx.lineTo(29, 29);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    this.map.addImage(id, ctx.getImageData(0, 0, size, size), { pixelRatio: 2 });
   }
 
   private async initRealFlightsLayer(): Promise<void> {
     const baseUrl = import.meta.env.BASE_URL || '/';
 
-    // Register sharp silhouette aircraft icons matching Osiris color palette
-    this.createPlaneIcon('plane-cyan', '#38bdf8', 24);   // Commercial airliner (Cyan)
-    this.createPlaneIcon('plane-green', '#4ade80', 22);  // Private aviation (Green)
-    this.createPlaneIcon('plane-pink', '#f472b6', 22);   // Executive jets (Pink)
-    this.createPlaneIcon('plane-red', '#ef4444', 26);    // Military air defense (Red)
+    // Register sharp, authentic Hi-DPI silhouette aircraft icons (devicePixelRatio: 2)
+    this.createHDPlaneIcon('plane-cyan', '#38bdf8', 'airliner');  // Commercial airliner (Cyan)
+    this.createHDPlaneIcon('plane-green', '#4ade80', 'bizjet');   // Private aviation (Green)
+    this.createHDPlaneIcon('plane-pink', '#f472b6', 'bizjet');    // Executive jets (Pink)
+    this.createHDPlaneIcon('plane-red', '#ef4444', 'fighter');    // Military air defense (Red)
 
     // Setup GeoJSON sources for each aviation group
     const sources = ['flights-commercial', 'flights-private', 'flights-jets', 'flights-military'];
@@ -1017,6 +1232,222 @@ export class GlobeScene {
       .catch((err) => console.warn('[GlobeScene] Weather fetch error:', err));
   }
 
+  private initOceanCurrentsLayer(): void {
+    try {
+      if (!this.map.getSource('ocean-currents')) {
+        this.map.addSource('ocean-currents', {
+          type: 'geojson',
+          data: oceanCurrentsGeoJson as any,
+        });
+      }
+
+      // Outer glow for hydrodynamic flow
+      if (!this.map.getLayer('ocean-currents-glow')) {
+        this.map.addLayer({
+          id: 'ocean-currents-glow',
+          type: 'line',
+          source: 'ocean-currents',
+          paint: {
+            'line-width': ['interpolate', ['linear'], ['zoom'], 1, 4, 6, 8, 10, 12],
+            'line-color': [
+              'case',
+              ['==', ['get', 'type'], 'WARM'],
+              '#f97316',
+              '#06b6d4'
+            ],
+            'line-opacity': 0.3,
+            'line-blur': 3,
+          },
+        });
+      }
+
+      // Core pulsing dashline
+      if (!this.map.getLayer('ocean-currents-core')) {
+        this.map.addLayer({
+          id: 'ocean-currents-core',
+          type: 'line',
+          source: 'ocean-currents',
+          paint: {
+            'line-width': ['interpolate', ['linear'], ['zoom'], 1, 2, 6, 3.5, 10, 5],
+            'line-color': [
+              'case',
+              ['==', ['get', 'type'], 'WARM'],
+              '#ff5722',
+              '#22d3ee'
+            ],
+            'line-opacity': 0.9,
+            'line-dasharray': [4, 2],
+          },
+        });
+      }
+
+      // Labels
+      if (!this.map.getLayer('ocean-currents-label')) {
+        this.map.addLayer({
+          id: 'ocean-currents-label',
+          type: 'symbol',
+          source: 'ocean-currents',
+          minzoom: 3,
+          layout: {
+            'symbol-placement': 'line',
+            'text-field': ['get', 'name'],
+            'text-size': 10,
+            'text-letter-spacing': 0.05,
+          },
+          paint: {
+            'text-color': '#e2e8f0',
+            'text-halo-color': '#020617',
+            'text-halo-width': 1.5,
+          },
+        });
+      }
+
+      this.map.on('click', 'ocean-currents-core', (e) => {
+        const feat = e.features?.[0];
+        if (feat && feat.properties) {
+          this.onSelectOceanCurrent?.(feat.properties);
+        }
+      });
+
+      this.map.on('mouseenter', 'ocean-currents-core', () => {
+        this.map.getCanvas().style.cursor = 'pointer';
+      });
+      this.map.on('mouseleave', 'ocean-currents-core', () => {
+        this.map.getCanvas().style.cursor = '';
+      });
+    } catch (e) {
+      console.warn('[GlobeScene] Ocean currents layer init error:', e);
+    }
+  }
+
+  private async initDopplerRadarLayer(): Promise<void> {
+    try {
+      // Dynamic RainViewer live radar composite
+      let radarTime = Math.floor(Date.now() / 1000) - 600; // default 10 mins ago
+      try {
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch('https://api.rainviewer.com/public/weather-maps.json', { signal: controller.signal });
+        clearTimeout(tid);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.radar && json.radar.past && json.radar.past.length > 0) {
+            radarTime = json.radar.past[json.radar.past.length - 1].time;
+          }
+        }
+      } catch (e) {
+        console.warn('[GlobeScene] RainViewer API fallback to time offset:', e);
+      }
+
+      const tileUrl = `https://tilecache.rainviewer.com/v2/radar/${radarTime}/256/{z}/{x}/{y}/2/1_1.png`;
+
+      if (!this.map.getSource('doppler-radar-source')) {
+        this.map.addSource('doppler-radar-source', {
+          type: 'raster',
+          tiles: [tileUrl],
+          tileSize: 256,
+        });
+
+        this.map.addLayer({
+          id: 'doppler-radar-layer',
+          type: 'raster',
+          source: 'doppler-radar-source',
+          paint: {
+            'raster-opacity': 0.72,
+            'raster-fade-duration': 300,
+          },
+          layout: {
+            visibility: 'visible',
+          },
+        });
+      }
+    } catch (e) {
+      console.warn('[GlobeScene] Doppler radar initialization error:', e);
+    }
+  }
+
+  private initMilitaryBasesLayer(): void {
+    try {
+      if (!this.map.getSource('military-bases')) {
+        this.map.addSource('military-bases', {
+          type: 'geojson',
+          data: militaryBasesGeoJson as any,
+        });
+      }
+
+      // Base radar pulse / glow
+      if (!this.map.getLayer('mil-bases-glow')) {
+        this.map.addLayer({
+          id: 'mil-bases-glow',
+          type: 'circle',
+          source: 'military-bases',
+          paint: {
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 6, 6, 10, 12, 16],
+            'circle-color': [
+              'case',
+              ['==', ['get', 'alliance'], 'STRATEGIC_COMPETITOR'],
+              '#ef4444',
+              ['==', ['get', 'alliance'], 'INDO_PACIFIC_ALLIED'],
+              '#10b981',
+              '#06b6d4'
+            ],
+            'circle-opacity': 0.35,
+            'circle-blur': 1,
+          },
+        });
+      }
+
+      // Base symbol layer
+      if (!this.map.getLayer('mil-bases-layer')) {
+        this.map.addLayer({
+          id: 'mil-bases-layer',
+          type: 'symbol',
+          source: 'military-bases',
+          layout: {
+            'icon-image': [
+              'case',
+              ['==', ['get', 'branch'], 'NAVY'],
+              'mil-icon-navy',
+              ['==', ['get', 'branch'], 'AIR_FORCE'],
+              'mil-icon-air',
+              ['==', ['get', 'branch'], 'RADAR'],
+              'mil-icon-radar',
+              'mil-icon-joint'
+            ],
+            'icon-size': ['interpolate', ['linear'], ['zoom'], 1, 0.45, 6, 0.65, 12, 0.9],
+            'icon-allow-overlap': true,
+            'text-field': ['get', 'name'],
+            'text-size': 9.5,
+            'text-offset': [0, 1.5],
+            'text-optional': true,
+          },
+          paint: {
+            'text-color': '#f1f5f9',
+            'text-halo-color': '#020617',
+            'text-halo-width': 1.5,
+          },
+        });
+      }
+
+      // Click handler
+      this.map.on('click', 'mil-bases-layer', (e) => {
+        const feat = e.features?.[0];
+        if (feat && feat.properties) {
+          this.onSelectMilitaryBase?.(feat.properties);
+        }
+      });
+
+      this.map.on('mouseenter', 'mil-bases-layer', () => {
+        this.map.getCanvas().style.cursor = 'pointer';
+      });
+      this.map.on('mouseleave', 'mil-bases-layer', () => {
+        this.map.getCanvas().style.cursor = '';
+      });
+    } catch (e) {
+      console.warn('[GlobeScene] Military bases layer init error:', e);
+    }
+  }
+
   private initTacticalControls(): void {
     const controls = document.createElement('div');
     controls.className = 'map-controls-tactical';
@@ -1291,10 +1722,36 @@ export class GlobeScene {
         if (this.map.getLayer('weather-dots')) this.map.setLayoutProperty('weather-dots', 'visibility', vis);
         if (this.map.getLayer('weather-glow')) this.map.setLayoutProperty('weather-glow', 'visibility', vis);
         if (this.map.getLayer('weather-label')) this.map.setLayoutProperty('weather-label', 'visibility', vis);
+      } else if (layerKey === 'ocean_currents') {
+        const currentLayers = ['ocean-currents-glow', 'ocean-currents-core', 'ocean-currents-label'];
+        currentLayers.forEach((id) => {
+          if (this.map.getLayer(id)) this.map.setLayoutProperty(id, 'visibility', vis);
+        });
+      } else if (layerKey === 'doppler_radar') {
+        if (this.map.getLayer('doppler-radar-layer')) {
+          this.map.setLayoutProperty('doppler-radar-layer', 'visibility', vis);
+        }
+      } else if (layerKey === 'military_bases') {
+        const milLayers = ['mil-bases-glow', 'mil-bases-layer'];
+        milLayers.forEach((id) => {
+          if (this.map.getLayer(id)) this.map.setLayoutProperty(id, 'visibility', vis);
+        });
       }
     } catch (e) {
       console.warn(`[GlobeScene] Toggle layer ${layerKey} error:`, e);
     }
+  }
+
+  public toggleDopplerRadar(visible: boolean): void {
+    this.toggleLayer('doppler_radar', visible);
+  }
+
+  public toggleOceanCurrents(visible: boolean): void {
+    this.toggleLayer('ocean_currents', visible);
+  }
+
+  public toggleMilitaryBases(visible: boolean): void {
+    this.toggleLayer('military_bases', visible);
   }
 
   public setProjection(proj: 'globe' | 'mercator'): void {

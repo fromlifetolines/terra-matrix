@@ -147,20 +147,46 @@ html, body {
 .header-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
-.tpe-clock,
-.utc-clock {
+.tpe-clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 600;
-  color: #fff;
-  background: #121217;
-  padding: 4px 10px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap !important;
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 10px;
+  background: rgba(14, 14, 19, 0.95);
   border: 1px solid var(--border-subtle);
-  border-radius: 3px;
-  letter-spacing: 0.05em;
+  border-radius: 4px;
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.6);
+  user-select: none;
+}
+
+.clock-zulu {
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.clock-divider {
+  color: var(--border-active);
+  font-weight: 300;
+  opacity: 0.6;
+}
+
+.clock-local {
+  color: var(--accent-emerald);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .header-btn {
@@ -1137,43 +1163,69 @@ html, body {
   top: 14px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   z-index: 50;
   user-select: none;
+  max-height: calc(100% - 28px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.right-tactical-rail::-webkit-scrollbar {
+  width: 3px;
+}
+
+.right-tactical-rail::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.right-tactical-rail::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
 }
 
 .tactical-rail-btn {
   display: flex;
   align-items: center;
-  gap: 7px;
-  background: rgba(10, 10, 14, 0.85);
+  gap: 6px;
+  background: rgba(10, 10, 14, 0.88);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 6px;
-  padding: 6px 11px;
+  border-radius: 4px;
+  padding: 5px 9px;
   color: var(--text-muted);
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
 }
 
 .tactical-rail-btn:hover {
-  background: rgba(20, 20, 28, 0.95);
+  background: rgba(24, 24, 32, 0.95);
   color: #fff;
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.25);
   transform: translateX(-2px);
 }
 
 .tactical-rail-btn.active {
-  background: rgba(6, 182, 212, 0.15);
-  border-color: rgba(6, 182, 212, 0.5);
+  background: rgba(6, 182, 212, 0.18);
+  border-color: rgba(6, 182, 212, 0.55);
   color: var(--accent-cyan);
-  box-shadow: 0 0 12px rgba(6, 182, 212, 0.25);
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.25);
+}
+
+.tactical-rail-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 2px 2px;
 }
 
 /* Space Tracking Left Drawer */
@@ -2735,5 +2787,144 @@ html, body {
   font-size: 12px;
   font-weight: 700;
 }
+
+/* ==========================================================================
+   Doppler Radar dBZ Legend & Tactical Layer Cards
+   ========================================================================== */
+.doppler-radar-legend-card {
+  position: absolute;
+  bottom: 14px;
+  right: 140px;
+  z-index: 55;
+  background: rgba(10, 12, 18, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  border-radius: 6px;
+  padding: 10px 14px;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  user-select: none;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.radar-legend-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 4px;
+}
+
+.radar-legend-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--accent-cyan);
+}
+
+.radar-live-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  box-shadow: 0 0 8px var(--accent-cyan);
+  animation: pulse-live 1.2s infinite;
+}
+
+.radar-legend-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 14px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.radar-legend-close-btn:hover {
+  color: #fff;
+}
+
+.radar-dbz-bar-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.radar-dbz-color-gradient {
+  height: 10px;
+  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: linear-gradient(
+    to right,
+    #38bdf8 0%,
+    #10b981 25%,
+    #f59e0b 50%,
+    #f97316 70%,
+    #ef4444 85%,
+    #c084fc 100%
+  );
+}
+
+.radar-dbz-ticks {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.radar-legend-labels {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+}
+
+.radar-legend-label-col {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-muted);
+}
+
+.label-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.radar-legend-telemetry {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-dim);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 4px;
+}
+
+.hud-tooltip-badge.badge-military {
+  background: rgba(239, 68, 68, 0.25);
+  color: #f87171;
+  border: 1px solid #ef4444;
+}
+
+.hud-tooltip-badge.badge-ocean {
+  background: rgba(6, 182, 212, 0.25);
+  color: #22d3ee;
+  border: 1px solid #06b6d4;
+}
+
 
 
