@@ -62,6 +62,11 @@ export class CctvExpandedModal {
             <span class="cctv-modal-badge" id="cctv-refresh-badge">
               ${isYouTube ? 'LIVE STREAM (HD)' : '● LIVE FEED ACTIVE'}
             </span>
+            ${
+              !isYouTube
+                ? `<button class="cctv-modal-btn" id="cctv-modal-fit-btn" title="切換滿版 / 等比例 (Toggle Fill / Fit Frame)">⛶ FILL</button>`
+                : ''
+            }
             <button class="cctv-modal-btn" id="cctv-modal-focus-btn" title="Focus Camera Location on 3D Globe">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
               LOCATE
@@ -148,9 +153,18 @@ export class CctvExpandedModal {
       }
     });
 
+    const fitBtn = modal.querySelector<HTMLButtonElement>('#cctv-modal-fit-btn');
     const refreshNowBtn = modal.querySelector('#cctv-refresh-now-btn');
     const dynamicImg = modal.querySelector<HTMLImageElement>('#cctv-modal-dynamic-img');
     const fallbackEl = modal.querySelector<HTMLElement>('#cctv-modal-fallback');
+
+    if (fitBtn && dynamicImg) {
+      fitBtn.addEventListener('click', () => {
+        const isFill = dynamicImg.classList.toggle('fill-mode');
+        fitBtn.textContent = isFill ? '⛶ FIT' : '⛶ FILL';
+        fitBtn.title = isFill ? '切換為等比例縮放 (Fit)' : '切換為滿版填滿 (Fill)';
+      });
+    }
 
     if (dynamicImg) {
       dynamicImg.onerror = () => {

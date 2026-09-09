@@ -856,10 +856,10 @@ export class GlobeScene {
     });
 
     const flightConfigs = [
-      { id: 'fl-commercial', src: 'flights-commercial', icon: 'plane-cyan', scale: 0.8 },
-      { id: 'fl-private', src: 'flights-private', icon: 'plane-green', scale: 0.75 },
-      { id: 'fl-jets', src: 'flights-jets', icon: 'plane-pink', scale: 0.75 },
-      { id: 'fl-military', src: 'flights-military', icon: 'plane-red', scale: 0.9 },
+      { id: 'fl-commercial', src: 'flights-commercial', icon: 'plane-cyan', scale: 0.44 },
+      { id: 'fl-private', src: 'flights-private', icon: 'plane-green', scale: 0.40 },
+      { id: 'fl-jets', src: 'flights-jets', icon: 'plane-pink', scale: 0.40 },
+      { id: 'fl-military', src: 'flights-military', icon: 'plane-red', scale: 0.46 },
     ];
 
     flightConfigs.forEach((cfg) => {
@@ -869,14 +869,14 @@ export class GlobeScene {
         source: cfg.src,
         layout: {
           'icon-image': cfg.icon,
-          'icon-size': ['interpolate', ['linear'], ['zoom'], 1, 0.45 * cfg.scale, 5, 0.75 * cfg.scale, 10, 1.15 * cfg.scale],
+          'icon-size': ['interpolate', ['linear'], ['zoom'], 1, 0.35 * cfg.scale, 5, 0.65 * cfg.scale, 10, 0.95 * cfg.scale],
           'icon-rotate': ['get', 'heading'],
           'icon-rotation-alignment': 'map',
           'icon-allow-overlap': true,
           'icon-ignore-placement': true,
         },
         paint: {
-          'icon-opacity': 0.9,
+          'icon-opacity': 0.92,
         },
       });
 
@@ -903,14 +903,14 @@ export class GlobeScene {
       minzoom: 4.5,
       layout: {
         'text-field': ['get', 'callsign'],
-        'text-size': 9,
-        'text-offset': [0, 1.4],
+        'text-size': 8.5,
+        'text-offset': [0, 1.1],
         'text-allow-overlap': false,
       },
       paint: {
         'text-color': '#38bdf8',
         'text-halo-color': '#000000',
-        'text-halo-width': 1.2,
+        'text-halo-width': 1.6,
       },
     });
 
@@ -1693,6 +1693,117 @@ export class GlobeScene {
 
   public clearMeasureLine(): void {
     const source = this.map.getSource('measure-source') as maplibregl.GeoJSONSource;
+    if (source) {
+      source.setData({ type: 'FeatureCollection', features: [] });
+    }
+  }
+
+  public drawNavigationRoute(coordinates: [number, number][], fitBounds = true): void {
+    if (!this.map || !coordinates || coordinates.length === 0) return;
+    const geojson: any = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates,
+          },
+          properties: {},
+        },
+        {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: coordinates[0],
+          },
+          properties: { role: 'start' },
+        },
+        {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: coordinates[coordinates.length - 1],
+          },
+          properties: { role: 'end' },
+        },
+      ],
+    };
+
+    const source = this.map.getSource('navigation-route-source') as maplibregl.GeoJSONSource;
+    if (source) {
+      source.setData(geojson);
+    } else {
+      this.map.addSource('navigation-route-source', {
+        type: 'geojson',
+        data: geojson,
+      });
+
+      // Route casing glow
+      this.map.addLayer({
+        id: 'navigation-route-glow',
+        type: 'line',
+        source: 'navigation-route-source',
+        filter: ['==', '$type', 'LineString'],
+        paint: {
+          'line-color': '#00e5ff',
+          'line-width': 8,
+          'line-opacity': 0.35,
+          'line-blur': 3,
+        },
+      });
+
+      // Core route vector
+      this.map.addLayer({
+        id: 'navigation-route-line',
+        type: 'line',
+        source: 'navigation-route-source',
+        filter: ['==', '$type', 'LineString'],
+        paint: {
+          'line-color': '#06b6d4',
+          'line-width': 4.5,
+          'line-opacity': 0.95,
+        },
+      });
+
+      // Start / End point circles
+      this.map.addLayer({
+        id: 'navigation-route-points',
+        type: 'circle',
+        source: 'navigation-route-source',
+        filter: ['==', '$type', 'Point'],
+        paint: {
+          'circle-radius': 6,
+          'circle-color': [
+            'case',
+            ['==', ['get', 'role'], 'start'],
+            '#10b981',
+            '#ef4444',
+          ],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff',
+        },
+      });
+    }
+
+    if (fitBounds && coordinates.length > 0) {
+      let minLng = coordinates[0][0], maxLng = coordinates[0][0];
+      let minLat = coordinates[0][1], maxLat = coordinates[0][1];
+      for (const [lng, lat] of coordinates) {
+        if (lng < minLng) minLng = lng;
+        if (lng > maxLng) maxLng = lng;
+        if (lat < minLat) minLat = lat;
+        if (lat > maxLat) maxLat = lat;
+      }
+      this.map.fitBounds(
+        [[minLng, minLat], [maxLng, maxLat]],
+        { padding: 80, duration: 1200, maxZoom: 16 }
+      );
+    }
+  }
+
+  public clearNavigationRoute(): void {
+    const source = this.map?.getSource('navigation-route-source') as maplibregl.GeoJSONSource;
     if (source) {
       source.setData({ type: 'FeatureCollection', features: [] });
     }

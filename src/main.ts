@@ -13,6 +13,8 @@ import { SearchBar, type SearchResult } from './components/SearchBar';
 import { MeasureTool, type MeasureResult } from './components/MeasureTool';
 import { DopplerRadarLegend } from './components/DopplerRadarLegend';
 import { CctvExpandedModal } from './components/CctvExpandedModal';
+import { DirectionsPanel } from './components/DirectionsPanel';
+import { OsintPanel } from './components/OsintPanel';
 import type { EarthquakeItem } from './globe/layers/EarthquakeLayer';
 import type { GeoIncident } from './data/incidents-news';
 
@@ -33,6 +35,8 @@ class TerraMatrixApp {
   private measureTool!: MeasureTool;
   private dopplerLegend!: DopplerRadarLegend;
   private cctvExpandedModal!: CctvExpandedModal;
+  private directionsPanel!: DirectionsPanel;
+  private osintPanel!: OsintPanel;
 
   private autoRotate = false;
 
@@ -182,6 +186,12 @@ class TerraMatrixApp {
               <span>🛰️</span> SAT
             </button>
             <div class="tactical-rail-divider"></div>
+            <button class="tactical-rail-btn" id="rail-btn-recon" title="Osiris 20-in-1 Recon & Cyber Threat Suite">
+              <span>🛡️</span> RECON
+            </button>
+            <button class="tactical-rail-btn" id="rail-btn-route" title="Tactical Directions & Turn-by-Turn Navigation">
+              <span>🛣️</span> ROUTE
+            </button>
             <button class="tactical-rail-btn" id="rail-btn-intel" title="Toggle Live Intel & SIGINT Feed">
               <span>🚨</span> INTEL FEED
             </button>
@@ -457,6 +467,8 @@ class TerraMatrixApp {
     const btn2d = document.getElementById('rail-btn-2d');
     const btnMap = document.getElementById('rail-btn-map');
     const btnSat = document.getElementById('rail-btn-sat');
+    const btnRecon = document.getElementById('rail-btn-recon');
+    const btnRoute = document.getElementById('rail-btn-route');
     const btnIntel = document.getElementById('rail-btn-intel');
     const btnMarkets = document.getElementById('rail-btn-markets');
     const btnFlightRadar = document.getElementById('rail-btn-flight-radar');
@@ -487,6 +499,16 @@ class TerraMatrixApp {
       this.globeScene.setBaseStyle('sat');
       btnSat.classList.add('active');
       btnMap?.classList.remove('active');
+    });
+
+    btnRecon?.addEventListener('click', () => {
+      const active = this.osintPanel.toggle();
+      btnRecon.classList.toggle('active', active);
+    });
+
+    btnRoute?.addEventListener('click', () => {
+      const active = this.directionsPanel.toggle();
+      btnRoute.classList.toggle('active', active);
     });
 
     btnIntel?.addEventListener('click', () => {
@@ -596,7 +618,29 @@ class TerraMatrixApp {
     );
 
     // 5. Mount Macro & Defense Markets Panel (Right)
-    this.marketsPanel = new MarketsPanel(globeWrapper);
+    this.marketsPanel = new MarketsPanel(globeWrapper, {
+      onTriggerAiOverview: () => {
+        this.aiSitrepModal.toggle();
+      },
+    });
+
+    // 5b. Mount Tactical Route Navigation Planner (OSRM GPS)
+    this.directionsPanel = new DirectionsPanel({
+      parentElement: globeWrapper,
+      onDrawRoute: (coords) => {
+        this.globeScene.drawNavigationRoute(coords, true);
+      },
+      onClearRoute: () => {
+        this.globeScene.clearNavigationRoute();
+      },
+      getMapCenter: () => {
+        const c = this.globeScene.getMap().getCenter();
+        return { lat: c.lat, lng: c.lng };
+      },
+    });
+
+    // 5c. Mount Osiris 20-in-1 Recon & Cyber Threat Suite
+    this.osintPanel = new OsintPanel(globeWrapper);
 
     // 6. Mount Flight Watch Panel (Right)
     this.flightWatchPanel = new FlightWatchPanel(
@@ -626,15 +670,19 @@ class TerraMatrixApp {
     // 9. Mount Global Search Bar in Header
     const searchContainer = document.getElementById('header-search-container');
     if (searchContainer) {
-      this.searchBar = new SearchBar(searchContainer, (res: SearchResult) => {
-        this.globeScene.focusCoordinates(res.lat, res.lng, res.zoom, res.pitch, res.bearing);
-        this.showInfoCard({
-          badge: `${res.category} // TARGET LOCATED`,
-          badgeClass: 'MONITOR',
-          title: res.title,
-          content: `${res.subtitle}<br/>Geodetic Lat/Lng: ${res.lat.toFixed(4)}°, ${res.lng.toFixed(4)}°`,
-        });
-      });
+      this.searchBar = new SearchBar(
+        searchContainer,
+        (res: SearchResult) => {
+          this.globeScene.focusCoordinates(res.lat, res.lng, res.zoom, res.pitch, res.bearing);
+          this.showInfoCard({
+            badge: `${res.category} // TARGET LOCATED`,
+            badgeClass: 'MONITOR',
+            title: res.title,
+            content: `${res.subtitle}<br/>Geodetic Lat/Lng: ${res.lat.toFixed(4)}°, ${res.lng.toFixed(4)}°`,
+          });
+        },
+        () => this.globeScene.getAllFlights()
+      );
     }
 
     // 10. Mount Doppler Radar Legend
