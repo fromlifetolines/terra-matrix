@@ -4,6 +4,13 @@ import { StreamMatrix } from './matrix/StreamMatrix';
 import { SpaceCamPanel } from './components/SpaceCam';
 import { SpaceTrackingPanel, type SatelliteSublayerState } from './components/SpaceTrackingPanel';
 import { SatelliteCardModal } from './components/SatelliteCard';
+import { RegionPresetsPanel, type RegionPreset } from './components/RegionPresets';
+import { IntelFeedPanel } from './components/IntelFeedPanel';
+import { MarketsPanel } from './components/MarketsPanel';
+import { FlightWatchPanel, type FlightItem } from './components/FlightWatchPanel';
+import { AiSitrepModal } from './components/AiSitrepModal';
+import { SearchBar, type SearchResult } from './components/SearchBar';
+import { MeasureTool, type MeasureResult } from './components/MeasureTool';
 import type { EarthquakeItem } from './globe/layers/EarthquakeLayer';
 import type { GeoIncident } from './data/incidents-news';
 
@@ -13,6 +20,16 @@ class TerraMatrixApp {
   private spaceCamPanel!: SpaceCamPanel;
   private spaceTrackingPanel!: SpaceTrackingPanel;
   private satelliteCardModal?: SatelliteCardModal;
+
+  // Osiris Phase 2 Tactical Modules
+  private regionPresets!: RegionPresetsPanel;
+  private intelFeedPanel!: IntelFeedPanel;
+  private marketsPanel!: MarketsPanel;
+  private flightWatchPanel!: FlightWatchPanel;
+  private aiSitrepModal!: AiSitrepModal;
+  private searchBar!: SearchBar;
+  private measureTool!: MeasureTool;
+
   private autoRotate = false;
 
   constructor() {
@@ -66,6 +83,9 @@ class TerraMatrixApp {
           <div class="brand-subtitle">// SITUATION INTELLIGENCE COMMAND <span style="color:var(--accent-cyan);font-weight:700;">V.4.1</span></div>
         </div>
 
+        <!-- Global Search Bar Container -->
+        <div class="header-search" id="header-search-container"></div>
+
         <div class="header-center">
           <div class="header-metric">
             <span>LAYERS:</span>
@@ -73,7 +93,7 @@ class TerraMatrixApp {
           </div>
           <div class="header-metric">
             <span>ENTITIES:</span>
-            <span class="metric-val" style="color:var(--accent-emerald);">47,861+ DETECTED</span>
+            <span class="metric-val" style="color:var(--accent-emerald);">47,861+</span>
           </div>
           <div class="header-metric">
             <span>SOLAR:</span>
@@ -82,13 +102,17 @@ class TerraMatrixApp {
         </div>
 
         <div class="header-right">
+          <button id="btn-ai-sitrep" class="header-btn" style="border-color:rgba(6,182,212,0.5);color:var(--accent-cyan);" title="Generate AI Multi-Domain SITREP Briefing">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/><path d="M12 6v6l4 2"/></svg>
+            AI SITREP
+          </button>
           <button id="btn-auto-rotate" class="header-btn" title="Toggle Earth Auto-Rotation">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
             AUTO ROTATE
           </button>
           <button id="btn-reset-view" class="header-btn" title="Reset Camera Perspective">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="12 8 8 12 12 16 12 8"/></svg>
-            RESET VIEW
+            RESET
           </button>
           <div class="tpe-clock" style="display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:11px;">
             <span id="zulu-clock" style="color:var(--text-muted);">ZULU 00:00:00 UTC</span>
@@ -105,9 +129,9 @@ class TerraMatrixApp {
 
           <!-- Left Vertical Category Rail (Osiris Domain Navigation) -->
           <div class="left-category-rail">
-            <button class="category-rail-btn active" id="cat-btn-cyber" title="Cyber Threat Telemetry">
-              <span class="category-rail-icon">⚡</span>
-              <span>CYBER</span>
+            <button class="category-rail-btn active" id="cat-btn-theaters" title="Strategic Regional Theaters & Hotspots">
+              <span class="category-rail-icon">🎯</span>
+              <span>THEATERS</span>
             </button>
             <button class="category-rail-btn active" id="cat-btn-air" title="Live ADS-B Radar Air Traffic">
               <span class="category-rail-icon">✈️</span>
@@ -133,6 +157,10 @@ class TerraMatrixApp {
               <span class="category-rail-icon">⚠️</span>
               <span>WARZONES</span>
             </button>
+            <button class="category-rail-btn active" id="cat-btn-cyber" title="Cyber Threat Telemetry">
+              <span class="category-rail-icon">⚡</span>
+              <span>CYBER</span>
+            </button>
           </div>
 
           <!-- Right Tactical Action Rail -->
@@ -148,6 +176,18 @@ class TerraMatrixApp {
             </button>
             <button class="tactical-rail-btn" id="rail-btn-sat" title="NASA/ArcGIS Satellite Earth">
               <span>🛰️</span> SAT
+            </button>
+            <button class="tactical-rail-btn" id="rail-btn-intel" title="Toggle Live Intel & SIGINT Feed">
+              <span>🚨</span> INTEL FEED
+            </button>
+            <button class="tactical-rail-btn" id="rail-btn-markets" title="Toggle Defense & Macro Markets">
+              <span>📈</span> MARKETS
+            </button>
+            <button class="tactical-rail-btn" id="rail-btn-flight-radar" title="Open Air Radar Flight Watchlist">
+              <span>✈️</span> FLIGHT WATCH
+            </button>
+            <button class="tactical-rail-btn" id="rail-btn-measure" title="Geodesic Great-Circle Distance Ruler">
+              <span>📐</span> MEASURE
             </button>
             <button class="tactical-rail-btn active" id="rail-btn-sat-drawer" title="Toggle Space Tracking Drawer">
               <span>📡</span> TRACKING
@@ -174,13 +214,13 @@ class TerraMatrixApp {
           <div class="marquee-container">
             <div class="marquee-content" id="marquee-ticker">
               <span class="marquee-item"><span class="marquee-tag tag-solar">SOLAR FLUX</span> Kp 0 // Geomagnetic field quiet</span>
-              <span class="marquee-item"><span class="marquee-tag tag-crypto">BTC/USD</span> $78,320.00 ▲ +2.4%</span>
-              <span class="marquee-item"><span class="marquee-tag tag-crypto">ETH/USD</span> $2,542.80 ▲ +3.1%</span>
-              <span class="marquee-item"><span class="marquee-tag tag-crypto">SOL/USD</span> $188.50 ▲ +5.8%</span>
-              <span class="marquee-item"><span class="marquee-tag tag-quake">USGS M6.8</span> Kamchatka Peninsula Depth 33km</span>
+              <span class="marquee-item"><span class="marquee-tag tag-crypto">BTC/USD</span> $78,450.00 ▲ +2.4%</span>
+              <span class="marquee-item"><span class="marquee-tag tag-crypto">ETH/USD</span> $2,548.20 ▲ +3.1%</span>
+              <span class="marquee-item"><span class="marquee-tag tag-crypto">SOL/USD</span> $189.50 ▲ +5.8%</span>
+              <span class="marquee-item"><span class="marquee-tag tag-quake">USGS M6.2</span> Tohoku, Japan Depth 22km</span>
               <span class="marquee-item"><span class="marquee-tag tag-quake">USGS M5.4</span> Hualien County, Taiwan Depth 18km</span>
               <span class="marquee-item"><span class="marquee-tag tag-quake">USGS M5.9</span> Tonga Trench Depth 10km</span>
-              <span class="marquee-item"><span class="marquee-tag tag-solar">DEFCON 5</span> Normal Readiness // All orbital telemetry nominal</span>
+              <span class="marquee-item"><span class="marquee-tag tag-solar">DEFCON 3</span> Elevated Readiness // Multi-domain telemetry nominal</span>
             </div>
           </div>
         </div>
@@ -214,6 +254,13 @@ class TerraMatrixApp {
       }
     });
 
+    // Intercept map click for distance measurement if tool active
+    map.on('click', (e) => {
+      if (this.measureTool && this.measureTool.getIsActive()) {
+        this.measureTool.handleMapClick(e.lngLat.lat, e.lngLat.lng);
+      }
+    });
+
     // Handle CCTV Click: Auto-add to matrix and show tactical modal
     this.globeScene.onSelectCctv = (pt: any) => {
       this.streamMatrix.addChannel({
@@ -225,11 +272,12 @@ class TerraMatrixApp {
         country: pt.country,
       });
 
-      const coordsStr = (pt.lat !== undefined && pt.lon !== undefined)
-        ? `${pt.lat.toFixed(4)}°N, ${pt.lon.toFixed(4)}°E`
-        : (pt.lat !== undefined && pt.lng !== undefined)
-        ? `${pt.lat.toFixed(4)}°N, ${pt.lng.toFixed(4)}°E`
-        : 'Live Coordinates';
+      const coordsStr =
+        pt.lat !== undefined && pt.lon !== undefined
+          ? `${pt.lat.toFixed(4)}°N, ${pt.lon.toFixed(4)}°E`
+          : pt.lat !== undefined && pt.lng !== undefined
+          ? `${pt.lat.toFixed(4)}°N, ${pt.lng.toFixed(4)}°E`
+          : 'Live Coordinates';
 
       this.showInfoCard({
         badge: 'CCTV FEED ADDED',
@@ -241,16 +289,17 @@ class TerraMatrixApp {
 
     // Handle Earthquake Click
     this.globeScene.onSelectEarthquake = (q: EarthquakeItem) => {
-      const quakeTime = new Date(q.time).toLocaleString('en-US', {
-        timeZone: 'Asia/Taipei',
-        hour12: false,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      }) + ' TPE';
+      const quakeTime =
+        new Date(q.time).toLocaleString('en-US', {
+          timeZone: 'Asia/Taipei',
+          hour12: false,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        }) + ' TPE';
 
       this.showInfoCard({
         badge: `MAG ${q.mag.toFixed(1)} SEISMIC`,
@@ -331,7 +380,6 @@ class TerraMatrixApp {
       const globeWrapper = document.getElementById('globe-wrapper');
       if (!globeWrapper) return;
       if (this.satelliteCardModal) {
-        // close existing
         const existing = globeWrapper.querySelector('.satellite-detail-card');
         if (existing) existing.remove();
       }
@@ -380,6 +428,11 @@ class TerraMatrixApp {
     bindCat('cat-btn-weather', 'weather');
     bindCat('cat-btn-conflicts', 'global_incidents');
 
+    // Theaters preset panel button
+    document.getElementById('cat-btn-theaters')?.addEventListener('click', () => {
+      this.regionPresets.toggle();
+    });
+
     // Cyber dummy notification
     document.getElementById('cat-btn-cyber')?.addEventListener('click', (e) => {
       const btn = e.currentTarget as HTMLElement;
@@ -388,7 +441,8 @@ class TerraMatrixApp {
         badge: 'CYBER TELEMETRY ACTIVE',
         badgeClass: 'MONITOR',
         title: 'BGP & Undersea Cable Routing Monitor',
-        content: 'Autonomous cyber defense nodes online. Zero abnormal BGP route hijackings detected in Asia-Pacific sector.',
+        content:
+          'Autonomous cyber defense nodes online. Zero abnormal BGP route hijackings detected in Asia-Pacific sector.',
       });
     });
 
@@ -402,6 +456,10 @@ class TerraMatrixApp {
     const btn2d = document.getElementById('rail-btn-2d');
     const btnMap = document.getElementById('rail-btn-map');
     const btnSat = document.getElementById('rail-btn-sat');
+    const btnIntel = document.getElementById('rail-btn-intel');
+    const btnMarkets = document.getElementById('rail-btn-markets');
+    const btnFlightRadar = document.getElementById('rail-btn-flight-radar');
+    const btnMeasure = document.getElementById('rail-btn-measure');
     const btnSatDrawer = document.getElementById('rail-btn-sat-drawer');
     const btnIssCam = document.getElementById('rail-btn-iss-cam');
     const btnTarget = document.getElementById('rail-btn-target');
@@ -430,6 +488,29 @@ class TerraMatrixApp {
       btnMap?.classList.remove('active');
     });
 
+    btnIntel?.addEventListener('click', () => {
+      this.intelFeedPanel.toggle();
+      btnIntel.classList.toggle('active');
+    });
+
+    btnMarkets?.addEventListener('click', () => {
+      this.marketsPanel.toggle();
+      btnMarkets.classList.toggle('active');
+    });
+
+    btnFlightRadar?.addEventListener('click', () => {
+      // Sync active flights from GlobeScene
+      const allFlights = this.globeScene.getAllFlights();
+      this.flightWatchPanel.updateFlights(allFlights);
+      this.flightWatchPanel.toggle();
+      btnFlightRadar.classList.toggle('active');
+    });
+
+    btnMeasure?.addEventListener('click', () => {
+      const active = this.measureTool.toggle();
+      btnMeasure.classList.toggle('active', active);
+    });
+
     btnSatDrawer?.addEventListener('click', () => {
       this.spaceTrackingPanel.toggle();
     });
@@ -440,7 +521,7 @@ class TerraMatrixApp {
     });
 
     btnTarget?.addEventListener('click', () => {
-      this.globeScene.focusCoordinates(25.04, 121.50, 7.5);
+      this.globeScene.focusCoordinates(25.04, 121.5, 7.5, 45, 355);
     });
   }
 
@@ -460,6 +541,81 @@ class TerraMatrixApp {
       this.globeScene.toggleLayer('sat_earth', state.earth_obs);
       this.globeScene.toggleLayer('sat_science', state.science);
     });
+
+    // 3. Mount Strategic Region Presets Panel (Left)
+    this.regionPresets = new RegionPresetsPanel(globeWrapper, (region: RegionPreset) => {
+      this.globeScene.focusCoordinates(
+        region.lat,
+        region.lng,
+        region.zoom,
+        region.pitch,
+        region.bearing
+      );
+      this.showInfoCard({
+        badge: region.hot ? 'WARZONE SECTOR // HIGH THREAT' : 'STRATEGIC REGIONAL THEATER',
+        badgeClass: region.hot ? 'CRITICAL' : 'MONITOR',
+        title: region.label,
+        content: `Target Geodetic: ${region.lat.toFixed(2)}°, ${region.lng.toFixed(2)}°<br/>${
+          region.desc || 'Active Geostrategic Theater'
+        }`,
+      });
+    });
+
+    // 4. Mount Live Intel & SIGINT Feed Panel (Right)
+    this.intelFeedPanel = new IntelFeedPanel(
+      globeWrapper,
+      (lat: number, lng: number, zoom: number, title: string) => {
+        this.globeScene.focusCoordinates(lat, lng, zoom, 45, 0);
+        this.showInfoCard({
+          badge: 'TACTICAL SIGINT LOCATE',
+          badgeClass: 'CRITICAL',
+          title,
+          content: `Target located at ${lat.toFixed(3)}°, ${lng.toFixed(3)}°`,
+        });
+      }
+    );
+
+    // 5. Mount Macro & Defense Markets Panel (Right)
+    this.marketsPanel = new MarketsPanel(globeWrapper);
+
+    // 6. Mount Flight Watch Panel (Right)
+    this.flightWatchPanel = new FlightWatchPanel(
+      globeWrapper,
+      (fl: FlightItem) => {
+        this.globeScene.focusCoordinates(fl.lat, fl.lng, 9, 45, fl.heading);
+        this.globeScene.onSelectFlight?.(fl);
+      },
+      (filterCat: string) => {
+        this.globeScene.filterFlights(filterCat);
+      }
+    );
+
+    // 7. Mount AI Tactical SITREP Modal (Backdrop)
+    const appEl = document.getElementById('app') || document.body;
+    this.aiSitrepModal = new AiSitrepModal(appEl);
+
+    // 8. Mount Geodesic Measure Tool HUD
+    this.measureTool = new MeasureTool(globeWrapper, (res: MeasureResult | null) => {
+      if (res) {
+        this.globeScene.drawMeasureLine(res.pointA, res.pointB);
+      } else {
+        this.globeScene.clearMeasureLine();
+      }
+    });
+
+    // 9. Mount Global Search Bar in Header
+    const searchContainer = document.getElementById('header-search-container');
+    if (searchContainer) {
+      this.searchBar = new SearchBar(searchContainer, (res: SearchResult) => {
+        this.globeScene.focusCoordinates(res.lat, res.lng, res.zoom, res.pitch, res.bearing);
+        this.showInfoCard({
+          badge: `${res.category} // TARGET LOCATED`,
+          badgeClass: 'MONITOR',
+          title: res.title,
+          content: `${res.subtitle}<br/>Geodetic Lat/Lng: ${res.lat.toFixed(4)}°, ${res.lng.toFixed(4)}°`,
+        });
+      });
+    }
 
     // Update counts when satellites load
     setTimeout(() => {
@@ -519,16 +675,17 @@ class TerraMatrixApp {
     const update = () => {
       const now = new Date();
       if (tpeClockEl) {
-        const tpeTime = now.toLocaleString('en-US', {
-          timeZone: 'Asia/Taipei',
-          hour12: false,
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        }) + ' TPE';
+        const tpeTime =
+          now.toLocaleString('en-US', {
+            timeZone: 'Asia/Taipei',
+            hour12: false,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          }) + ' TPE';
         tpeClockEl.textContent = tpeTime;
       }
       if (zuluClockEl) {
@@ -554,7 +711,14 @@ class TerraMatrixApp {
     const resetBtn = document.getElementById('btn-reset-view');
     if (resetBtn) {
       resetBtn.addEventListener('click', () => {
-        this.globeScene.focusCoordinates(25.04, 121.50, 2.3);
+        this.globeScene.focusCoordinates(25.04, 121.5, 2.3, 30, 0);
+      });
+    }
+
+    const aiSitrepBtn = document.getElementById('btn-ai-sitrep');
+    if (aiSitrepBtn) {
+      aiSitrepBtn.addEventListener('click', () => {
+        this.aiSitrepModal.toggle();
       });
     }
   }

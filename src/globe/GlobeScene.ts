@@ -1122,13 +1122,129 @@ export class GlobeScene {
     this.rotateAnimationId = requestAnimationFrame(frame);
   }
 
-  public focusCoordinates(lat: number, lng: number, zoom = 12.5): void {
+  public focusCoordinates(
+    lat: number,
+    lng: number,
+    zoom = 12.5,
+    pitch?: number,
+    bearing?: number
+  ): void {
     this.map.flyTo({
       center: [lng, lat],
       zoom,
-      pitch: this.currentProjection === 'globe' ? 45 : 0,
-      duration: 1500,
+      pitch: pitch !== undefined ? pitch : this.currentProjection === 'globe' ? 45 : 0,
+      bearing: bearing !== undefined ? bearing : 0,
+      duration: 1800,
+      essential: true,
     });
+  }
+
+  public getAllFlights(): any[] {
+    return [
+      ...this.flightData.military,
+      ...this.flightData.commercial,
+      ...this.flightData.jets,
+      ...this.flightData.private,
+    ];
+  }
+
+  public filterFlights(category: string): void {
+    if (!this.map) return;
+    const all = ['fl-commercial', 'fl-private', 'fl-jets', 'fl-military'];
+    if (category === 'military') {
+      ['fl-commercial', 'fl-private', 'fl-jets'].forEach((id) => {
+        if (this.map.getLayer(id)) this.map.setLayoutProperty(id, 'visibility', 'none');
+      });
+      if (this.map.getLayer('fl-military'))
+        this.map.setLayoutProperty('fl-military', 'visibility', 'visible');
+    } else if (category === 'commercial') {
+      ['fl-commercial', 'fl-private', 'fl-jets'].forEach((id) => {
+        if (this.map.getLayer(id)) this.map.setLayoutProperty(id, 'visibility', 'visible');
+      });
+      if (this.map.getLayer('fl-military'))
+        this.map.setLayoutProperty('fl-military', 'visibility', 'none');
+    } else {
+      all.forEach((id) => {
+        if (this.map.getLayer(id)) this.map.setLayoutProperty(id, 'visibility', 'visible');
+      });
+    }
+  }
+
+  public drawMeasureLine(pointA: { lat: number; lng: number }, pointB: { lat: number; lng: number }): void {
+    const geojson: any = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: [
+              [pointA.lng, pointA.lat],
+              [pointB.lng, pointB.lat],
+            ],
+          },
+          properties: {},
+        },
+        {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [pointA.lng, pointA.lat],
+          },
+          properties: { label: 'POINT A' },
+        },
+        {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [pointB.lng, pointB.lat],
+          },
+          properties: { label: 'POINT B' },
+        },
+      ],
+    };
+
+    const source = this.map.getSource('measure-source') as maplibregl.GeoJSONSource;
+    if (source) {
+      source.setData(geojson);
+    } else {
+      this.map.addSource('measure-source', {
+        type: 'geojson',
+        data: geojson,
+      });
+
+      this.map.addLayer({
+        id: 'measure-line',
+        type: 'line',
+        source: 'measure-source',
+        filter: ['==', '$type', 'LineString'],
+        paint: {
+          'line-color': '#00e5ff',
+          'line-width': 2.5,
+          'line-dasharray': [2, 1],
+        },
+      });
+
+      this.map.addLayer({
+        id: 'measure-points',
+        type: 'circle',
+        source: 'measure-source',
+        filter: ['==', '$type', 'Point'],
+        paint: {
+          'circle-radius': 5,
+          'circle-color': '#00e5ff',
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff',
+        },
+      });
+    }
+  }
+
+  public clearMeasureLine(): void {
+    const source = this.map.getSource('measure-source') as maplibregl.GeoJSONSource;
+    if (source) {
+      source.setData({ type: 'FeatureCollection', features: [] });
+    }
   }
 
   public toggleLayer(layerKey: keyof GlobeLayerState, visible: boolean): void {
