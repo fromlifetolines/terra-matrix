@@ -153,7 +153,7 @@ export class CctvPreviewsManager {
             <span class="cctv-live-dot"></span>
             <span>LIVE</span>
           </div>
-          <div class="cctv-open-btn">
+          <div class="cctv-open-btn" title="原地放大全螢幕監控 (Expand CCTV in-place)">
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
             <span>MONITOR</span>
           </div>
@@ -232,6 +232,12 @@ export class CctvPreviewsManager {
           this.refreshIntervals.set(cam.id, timer);
         }
       }
+
+      const openBtn = tileWrapper.querySelector('.cctv-open-btn');
+      openBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.onSelectCamera?.(cam);
+      });
 
       tileWrapper.addEventListener('click', (e) => {
         e.stopPropagation();

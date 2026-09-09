@@ -228,7 +228,16 @@ export class GlobeScene {
     this.map.on('click', 'cctv-dots', (e) => {
       const feat = e.features?.[0];
       if (feat && feat.properties) {
-        this.handleCctvClick(feat.properties as any);
+        const coords = (feat.geometry as any)?.coordinates;
+        this.handleCctvClick(feat.properties as any, coords);
+      }
+    });
+
+    this.map.on('click', 'cctv-label', (e) => {
+      const feat = e.features?.[0];
+      if (feat && feat.properties) {
+        const coords = (feat.geometry as any)?.coordinates;
+        this.handleCctvClick(feat.properties as any, coords);
       }
     });
 
@@ -238,24 +247,35 @@ export class GlobeScene {
     this.map.on('mouseleave', 'cctv-dots', () => {
       this.map.getCanvas().style.cursor = '';
     });
+    this.map.on('mouseenter', 'cctv-label', () => {
+      this.map.getCanvas().style.cursor = 'pointer';
+    });
+    this.map.on('mouseleave', 'cctv-label', () => {
+      this.map.getCanvas().style.cursor = '';
+    });
   }
 
-  private handleCctvClick(cam: any): void {
+  private handleCctvClick(cam: any, coords?: [number, number]): void {
     let videoId = cam.videoId;
     if (!videoId && cam.stream_url) {
       const m = String(cam.stream_url).match(/(?:embed\/|v=|vi\/|youtu\.be\/|\/v\/)([a-zA-Z0-9_-]{11})/);
       if (m) videoId = m[1];
     }
 
+    const lat = cam.lat !== undefined ? Number(cam.lat) : coords ? coords[1] : undefined;
+    const lng = cam.lng !== undefined ? Number(cam.lng) : cam.lon !== undefined ? Number(cam.lon) : coords ? coords[0] : undefined;
+
     this.onSelectCctv?.({
       id: cam.id,
       name: cam.name,
       city: cam.city,
       country: cam.country,
-      lat: cam.lat,
-      lon: cam.lng !== undefined ? cam.lng : cam.lon,
+      lat,
+      lon: lng,
+      lng,
       videoId: videoId || '',
       feed_url: cam.feed_url || '',
+      stream_url: cam.stream_url || '',
       stream_type: cam.stream_type || 'jpg',
       source: cam.source || 'CCTV',
     });

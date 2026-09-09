@@ -12,6 +12,7 @@ import { AiSitrepModal } from './components/AiSitrepModal';
 import { SearchBar, type SearchResult } from './components/SearchBar';
 import { MeasureTool, type MeasureResult } from './components/MeasureTool';
 import { DopplerRadarLegend } from './components/DopplerRadarLegend';
+import { CctvExpandedModal } from './components/CctvExpandedModal';
 import type { EarthquakeItem } from './globe/layers/EarthquakeLayer';
 import type { GeoIncident } from './data/incidents-news';
 
@@ -31,6 +32,7 @@ class TerraMatrixApp {
   private searchBar!: SearchBar;
   private measureTool!: MeasureTool;
   private dopplerLegend!: DopplerRadarLegend;
+  private cctvExpandedModal!: CctvExpandedModal;
 
   private autoRotate = false;
 
@@ -274,30 +276,16 @@ class TerraMatrixApp {
       }
     });
 
-    // Handle CCTV Click: Auto-add to matrix and show tactical modal
+    // In-place CCTV Expanded Live Surveillance Terminal (matches LIVE FROM SPACE behavior)
+    this.cctvExpandedModal = new CctvExpandedModal({
+      onFocusCamera: (lat, lng) => {
+        this.globeScene.focusCoordinates(lat, lng, 13.5, 45, 0);
+      },
+    });
+
+    // Handle CCTV Click: In-place expanded modal right over globe (does not redirect to bottom matrix)
     this.globeScene.onSelectCctv = (pt: any) => {
-      this.streamMatrix.addChannel({
-        id: pt.id,
-        name: pt.name,
-        videoId: pt.videoId || '',
-        feed_url: pt.feed_url || '',
-        city: pt.city,
-        country: pt.country,
-      });
-
-      const coordsStr =
-        pt.lat !== undefined && pt.lon !== undefined
-          ? `${pt.lat.toFixed(4)}°N, ${pt.lon.toFixed(4)}°E`
-          : pt.lat !== undefined && pt.lng !== undefined
-          ? `${pt.lat.toFixed(4)}°N, ${pt.lng.toFixed(4)}°E`
-          : 'Live Coordinates';
-
-      this.showInfoCard({
-        badge: 'CCTV FEED ADDED',
-        badgeClass: 'MONITOR',
-        title: `${pt.name} (${pt.city || 'Taipei'}, ${pt.country || 'Taiwan'})`,
-        content: `Coordinates: ${coordsStr}<br/>Source: ${pt.source || 'LIVE FEED'}<br/><span style="color:var(--accent-emerald);">● 已同步串流加入下方播放矩陣</span>`,
-      });
+      this.cctvExpandedModal.open(pt);
     };
 
     // Handle Earthquake Click
