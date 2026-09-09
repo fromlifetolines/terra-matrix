@@ -1,3 +1,5 @@
+import { resolveFlightRouteDetails } from '../globe/FlightTrajectoryHelper';
+
 export interface FlightItem {
   id: string;
   callsign: string;
@@ -234,6 +236,7 @@ export class FlightWatchPanel {
         const isMil = f.category === 'military';
         const isEmg = f.squawk === '7700' || f.squawk === '7600';
         const isLocked = this.lockedFlightId === f.id;
+        const route = resolveFlightRouteDetails(f);
 
         return `
           <div class="flight-card ${isMil ? 'is-mil' : ''} ${isEmg ? 'is-emergency' : ''} ${isLocked ? 'is-locked' : ''}" data-id="${f.id}">
@@ -245,6 +248,12 @@ export class FlightWatchPanel {
               <button class="flight-track-btn" data-id="${f.id}" title="Direct Intercept & Lock Position">
                 🎯
               </button>
+            </div>
+            <!-- In-flight Route Corridor Summary -->
+            <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.25);border-radius:4px;padding:3px 8px;margin:5px 0;font-family:var(--font-mono);font-size:10px;">
+              <span style="font-weight:700;color:#38bdf8;">${route.originIata} <span style="font-size:8.5px;color:rgba(255,255,255,0.5);font-weight:normal;">🛫${route.deptTime}</span></span>
+              <span style="color:var(--text-dim);font-size:9px;">✈──${route.progressPct}%──▶</span>
+              <span style="font-weight:700;color:#38bdf8;">${route.destIata} <span style="font-size:8.5px;color:#10b981;font-weight:normal;">🛬${route.arrTime}</span></span>
             </div>
             <div class="flight-card-stats">
               <div class="flight-stat-item">

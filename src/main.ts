@@ -373,30 +373,78 @@ class TerraMatrixApp {
       });
     };
 
-    // Handle Real Live Flight Click: Display Military / Commercial Dossier
+    // Handle Real Live Flight Click: Display In-Flight Route Trajectory & Telemetry Dossier
     this.globeScene.onSelectFlight = (fl: any) => {
       const isMil = fl.category === 'military';
-      const altFt = Math.round((fl.alt || 0) * 3.28084);
-      const spdKmh = Math.round((fl.speed_knots || 0) * 1.852);
+      const altM = Math.round(Number(fl.alt) || 0);
+      const altFt = Math.round(altM * 3.28084);
+      const spdKts = Math.round(Number(fl.speed_knots) || 0);
+      const spdKmh = Math.round(spdKts * 1.852);
+      const route = this.globeScene.getCurrentFlightRoute() || this.globeScene.resolveFlightRoute(fl);
 
       this.showInfoCard({
-        badge: isMil ? 'AIR DEFENSE INTERCEPT // MILITARY' : 'CIVIL AVIATION RADAR // ADS-B',
+        badge: isMil ? 'AIR DEFENSE INTERCEPT // 3D TRAJECTORY' : 'IN-FLIGHT COCKPIT // ADS-B LIVE RADAR',
         badgeClass: isMil ? 'CRITICAL' : 'MONITOR',
         title: `FLIGHT ${fl.callsign || 'UNKNOWN'} // ${fl.model || 'AIRCRAFT'}`,
         content: `
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px; margin-bottom: 8px;">
-            <div><strong>Callsign:</strong> ${fl.callsign || 'N/A'}</div>
-            <div><strong>Category:</strong> ${String(fl.category || 'flight').toUpperCase()}</div>
-            <div><strong>Altitude:</strong> ${fl.alt || 0} m (${altFt.toLocaleString()} ft)</div>
-            <div><strong>Speed:</strong> ${fl.speed_knots || 0} kts (${spdKmh} km/h)</div>
-            <div><strong>Heading:</strong> ${fl.heading || 0}°</div>
-            <div><strong>Squawk:</strong> ${fl.squawk || 'AUTO'}</div>
-            <div><strong>ICAO24:</strong> ${fl.icao24 || 'N/A'}</div>
-            <div><strong>Tail Reg:</strong> ${fl.registration || 'N/A'}</div>
-          </div>
-          <div style="display: flex; gap: 8px; margin-top: 6px;">
-            <a href="https://www.flightradar24.com/${encodeURIComponent(fl.callsign)}" target="_blank" rel="noopener noreferrer" style="color:#38bdf8; text-decoration:none; font-size:10px; border:1px solid rgba(56,189,248,0.4); padding:3px 8px; border-radius:3px; background:rgba(56,189,248,0.1);">FLIGHTRADAR24 ↗</a>
-            <a href="https://www.radarbox.com/data/flights/${encodeURIComponent(fl.callsign)}" target="_blank" rel="noopener noreferrer" style="color:#4ade80; text-decoration:none; font-size:10px; border:1px solid rgba(74,222,128,0.4); padding:3px 8px; border-radius:3px; background:rgba(74,222,128,0.1);">RADARBOX ↗</a>
+          <div class="inflight-card-wrap">
+            <!-- In-Flight Passenger Route Banner -->
+            <div class="inflight-route-banner">
+              <div class="inflight-airport">
+                <span class="inflight-iata">${route.originIata}</span>
+                <span class="inflight-city">${route.originCity}</span>
+                <span class="inflight-time">🛫 DEP ${route.deptTime}</span>
+              </div>
+
+              <div class="inflight-plane-mid">
+                <span style="font-size:15px;">✈️</span>
+                <div class="inflight-progress-bar-wrap">
+                  <div class="inflight-progress-bar-fill" style="width: ${route.progressPct}%;"></div>
+                </div>
+                <div class="inflight-progress-label">
+                  <span>${route.elapsedStr}</span>
+                  <span style="color:#10b981;font-weight:700;">${route.progressPct}%</span>
+                  <span>${route.remainingStr}</span>
+                </div>
+              </div>
+
+              <div class="inflight-airport is-dest">
+                <span class="inflight-iata">${route.destIata}</span>
+                <span class="inflight-city">${route.destCity}</span>
+                <span class="inflight-time">🛬 ETA ${route.arrTime}</span>
+              </div>
+            </div>
+
+            <!-- In-Flight Telemetry Grid -->
+            <div class="inflight-telemetry-grid">
+              <div class="inflight-telemetry-box">
+                <div class="inflight-telemetry-k">LIVE ALTITUDE</div>
+                <div class="inflight-telemetry-v" style="color:#38bdf8;">${altFt.toLocaleString()} FT <span style="font-size:9.5px;color:rgba(255,255,255,0.5);">(${altM} m)</span></div>
+              </div>
+              <div class="inflight-telemetry-box">
+                <div class="inflight-telemetry-k">GROUND SPEED</div>
+                <div class="inflight-telemetry-v" style="color:#34d399;">${spdKts} KTS <span style="font-size:9.5px;color:rgba(255,255,255,0.5);">(${spdKmh} km/h)</span></div>
+              </div>
+              <div class="inflight-telemetry-box">
+                <div class="inflight-telemetry-k">TRACK & HEADING</div>
+                <div class="inflight-telemetry-v">${Math.round(fl.heading || 0)}°</div>
+              </div>
+              <div class="inflight-telemetry-box">
+                <div class="inflight-telemetry-k">SQUAWK CODE</div>
+                <div class="inflight-telemetry-v ${fl.squawk === '7700' ? 'is-sqk-alert' : ''}">${fl.squawk || 'AUTO'}</div>
+              </div>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;color:var(--text-muted);margin-top:1px;">
+              <span>TOTAL ROUTE: <b style="color:#fff;">${route.totalDistKm.toLocaleString()} KM</b></span>
+              <span>ICAO: <b style="color:#fff;">${fl.icao24 || 'N/A'}</b></span>
+            </div>
+
+            <!-- Live Trackers -->
+            <div style="display: flex; gap: 8px; margin-top: 2px;">
+              <a href="https://www.flightradar24.com/${encodeURIComponent(fl.callsign)}" target="_blank" rel="noopener noreferrer" style="color:#38bdf8; text-decoration:none; font-size:10px; border:1px solid rgba(56,189,248,0.4); padding:4px 8px; border-radius:3px; background:rgba(56,189,248,0.1); flex:1; text-align:center;">FLIGHTRADAR24 ↗</a>
+              <a href="https://www.radarbox.com/data/flights/${encodeURIComponent(fl.callsign)}" target="_blank" rel="noopener noreferrer" style="color:#4ade80; text-decoration:none; font-size:10px; border:1px solid rgba(74,222,128,0.4); padding:4px 8px; border-radius:3px; background:rgba(74,222,128,0.1); flex:1; text-align:center;">RADARBOX ↗</a>
+            </div>
           </div>
         `,
       });
@@ -737,6 +785,20 @@ class TerraMatrixApp {
       this.searchBar = new SearchBar(
         searchContainer,
         (res: SearchResult) => {
+          if (res.category === 'FLIGHT') {
+            const flight = res.flightData || {
+              callsign: res.title.replace(/^✈️\s*/, '').split(' ')[0],
+              lat: res.lat,
+              lng: res.lng,
+              heading: res.bearing || 0,
+              alt: 10668,
+              speed_knots: 450,
+              model: 'AIRCRAFT',
+            };
+            this.globeScene.highlightFlight(flight);
+            this.globeScene.onSelectFlight?.(flight);
+            return;
+          }
           this.globeScene.focusCoordinates(res.lat, res.lng, res.zoom, res.pitch, res.bearing);
           this.showInfoCard({
             badge: `${res.category} // TARGET LOCATED`,

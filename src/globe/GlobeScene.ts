@@ -8,6 +8,7 @@ import militaryBasesGeoJson from '../data/military-bases.json';
 import tectonicPlatesGeoJson from '../data/tectonic-plates.json';
 import { CycloneTracker, type CycloneItem } from './layers/CycloneLayer';
 import { DisasterTracker, type DisasterItem } from './layers/DisasterLayer';
+import { resolveFlightRouteDetails, type FlightRouteDetails } from './FlightTrajectoryHelper';
 
 export interface GlobeLayerState {
   cctv: boolean;
@@ -68,6 +69,7 @@ export class GlobeScene {
 
   private flightAnimationTimer?: number;
   private flightFetchTimer?: number;
+  private currentFlightRoute?: FlightRouteDetails;
   private flightData: {
     commercial: any[];
     private: any[];
@@ -2199,10 +2201,15 @@ export class GlobeScene {
     const lng = Number(flight.lng);
     if (isNaN(lat) || isNaN(lng)) return;
 
+    // 1. Calculate realistic in-flight route trajectory details
+    this.currentFlightRoute = resolveFlightRouteDetails(flight);
+    const route = this.currentFlightRoute;
+
     const callsign = String(flight.callsign || flight.icao24 || 'UNKNOWN').toUpperCase();
     const altFt = Math.round((Number(flight.alt) || 0) * 3.28084).toLocaleString() + ' FT';
     const speedKts = Math.round(Number(flight.speed_knots) || 0).toString();
 
+    // 2. Intercept HUD point feature
     const feature = {
       type: 'Feature' as const,
       geometry: {
@@ -2214,6 +2221,7 @@ export class GlobeScene {
         altFt,
         speedKnots: speedKts,
         model: flight.model || 'AIRCRAFT',
+        routeText: `${route.originIata} ➔ ${route.destIata}`,
       },
     };
 
@@ -2264,34 +2272,186 @@ export class GlobeScene {
         type: 'symbol',
         source: 'flight-intercept-source',
         layout: {
-          'text-field': ['concat', '🎯 LOCK // ', ['get', 'callsign'], '\n', ['get', 'altFt'], ' | ', ['get', 'speedKnots'], ' KTS'],
+          'text-field': ['concat', '🎯 ', ['get', 'callsign'], ' [', ['get', 'routeText'], ']\n', ['get', 'altFt'], ' | ', ['get', 'speedKnots'], ' KTS'],
           'text-size': 11,
-          'text-offset': [0, 2.2],
+          'text-offset': [0, 2.4],
           'text-allow-overlap': true,
           'text-ignore-placement': true,
         },
         paint: {
           'text-color': '#38bdf8',
           'text-halo-color': '#000000',
-          'text-halo-width': 2,
+          'text-halo-width': 2.2,
         },
       });
     }
 
-    // Ensure layers are visible
-    ['flight-intercept-ring', 'flight-intercept-dot', 'flight-intercept-hud'].forEach((id) => {
+    // 3. Render In-Flight Trajectory Arc & Waypoints
+    const trajectoryGeoJson = {
+      type: 'FeatureCollection' as const,
+      features: [
+        // Past Traveled Corridor (Solid Glowing Line)
+        {
+          type: 'Feature' as const,
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: route.traveledCoords,
+          },
+          properties: {
+            role: 'traveled',
+          },
+        },
+        // Future Destination Path (Dashed Guidance Line)
+        {
+          type: 'Feature' as const,
+          geometry: {
+            type: 'LineString' as const,
+            coordinates: route.futureCoords,
+          },
+          properties: {
+            role: 'future',
+          },
+        },
+        // Origin Airport Waypoint
+        {
+          type: 'Feature' as const,
+          geometry: {
+            type: 'Point' as const,
+            coordinates: route.originCoords,
+          },
+          properties: {
+            role: 'origin',
+            label: `🛫 ${route.originIata} DEP ${route.deptTime}`,
+          },
+        },
+        // Destination Airport Waypoint
+        {
+          type: 'Feature' as const,
+          geometry: {
+            type: 'Point' as const,
+            coordinates: route.destCoords,
+          },
+          properties: {
+            role: 'dest',
+            label: `🛬 ${route.destIata} ETA ${route.arrTime}`,
+          },
+        },
+      ],
+    };
+
+    const trajSrc = this.map.getSource('flight-trajectory-source') as any;
+    if (trajSrc) {
+      trajSrc.setData(trajectoryGeoJson);
+    } else {
+      this.map.addSource('flight-trajectory-source', {
+        type: 'geojson',
+        data: trajectoryGeoJson,
+      });
+
+      // Route casing glow
+      this.map.addLayer({
+        id: 'flight-trajectory-traveled-glow',
+        type: 'line',
+        source: 'flight-trajectory-source',
+        filter: ['==', ['get', 'role'], 'traveled'],
+        paint: {
+          'line-color': '#00f0ff',
+          'line-width': 8,
+          'line-blur': 3.5,
+          'line-opacity': 0.45,
+        },
+      });
+
+      // Traveled route core vector
+      this.map.addLayer({
+        id: 'flight-trajectory-traveled-line',
+        type: 'line',
+        source: 'flight-trajectory-source',
+        filter: ['==', ['get', 'role'], 'traveled'],
+        paint: {
+          'line-color': '#06b6d4',
+          'line-width': 3.5,
+          'line-opacity': 0.95,
+        },
+      });
+
+      // Future path dashed line
+      this.map.addLayer({
+        id: 'flight-trajectory-future-line',
+        type: 'line',
+        source: 'flight-trajectory-source',
+        filter: ['==', ['get', 'role'], 'future'],
+        paint: {
+          'line-color': '#38bdf8',
+          'line-width': 2.5,
+          'line-opacity': 0.75,
+          'line-dasharray': [3, 2],
+        },
+      });
+
+      // Waypoint circular beacons
+      this.map.addLayer({
+        id: 'flight-trajectory-waypoints',
+        type: 'circle',
+        source: 'flight-trajectory-source',
+        filter: ['in', ['get', 'role'], ['literal', ['origin', 'dest']]],
+        paint: {
+          'circle-radius': 7,
+          'circle-color': [
+            'case',
+            ['==', ['get', 'role'], 'origin'],
+            '#10b981',
+            '#f59e0b',
+          ],
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 2,
+        },
+      });
+
+      // Waypoint text labels
+      this.map.addLayer({
+        id: 'flight-trajectory-labels',
+        type: 'symbol',
+        source: 'flight-trajectory-source',
+        filter: ['in', ['get', 'role'], ['literal', ['origin', 'dest']]],
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-size': 11,
+          'text-offset': [0, 1.8],
+          'text-allow-overlap': true,
+          'text-ignore-placement': true,
+        },
+        paint: {
+          'text-color': '#ffffff',
+          'text-halo-color': '#000000',
+          'text-halo-width': 2.5,
+        },
+      });
+    }
+
+    // Ensure all radar & trajectory layers are visible
+    [
+      'flight-intercept-ring',
+      'flight-intercept-dot',
+      'flight-intercept-hud',
+      'flight-trajectory-traveled-glow',
+      'flight-trajectory-traveled-line',
+      'flight-trajectory-future-line',
+      'flight-trajectory-waypoints',
+      'flight-trajectory-labels',
+    ].forEach((id) => {
       if (this.map.getLayer(id)) {
         this.map.setLayoutProperty(id, 'visibility', 'visible');
       }
     });
 
-    // Directly fly 3D globe camera right to the aircraft position
+    // 4. Smoothly swoop camera to aircraft position with cockpit bearing
     this.map.flyTo({
       center: [lng, lat],
-      zoom: 9.5,
-      pitch: 48,
+      zoom: 8.5,
+      pitch: 52,
       bearing: typeof flight.heading === 'number' ? flight.heading : 0,
-      duration: 1800,
+      duration: 2000,
       essential: true,
     });
   }
@@ -2302,6 +2462,19 @@ export class GlobeScene {
     if (src) {
       src.setData({ type: 'FeatureCollection', features: [] });
     }
+    const trajSrc = this.map.getSource('flight-trajectory-source') as any;
+    if (trajSrc) {
+      trajSrc.setData({ type: 'FeatureCollection', features: [] });
+    }
+    this.currentFlightRoute = undefined;
+  }
+
+  public getCurrentFlightRoute(): FlightRouteDetails | undefined {
+    return this.currentFlightRoute;
+  }
+
+  public resolveFlightRoute(flight: any): FlightRouteDetails {
+    return resolveFlightRouteDetails(flight);
   }
 
   public getAllFlights(): any[] {
