@@ -5,6 +5,9 @@ import { CctvPreviewsManager } from './CctvPreviews';
 import { createSatelliteLayer, parseColor, type SatPoint } from './layers/SatelliteLayer';
 import oceanCurrentsGeoJson from '../data/ocean-currents.json';
 import militaryBasesGeoJson from '../data/military-bases.json';
+import tectonicPlatesGeoJson from '../data/tectonic-plates.json';
+import { CycloneTracker, type CycloneItem } from './layers/CycloneLayer';
+import { DisasterTracker, type DisasterItem } from './layers/DisasterLayer';
 
 export interface GlobeLayerState {
   cctv: boolean;
@@ -24,6 +27,9 @@ export interface GlobeLayerState {
   ocean_currents: boolean;
   doppler_radar: boolean;
   military_bases: boolean;
+  cyclones: boolean;
+  disasters: boolean;
+  faults: boolean;
 }
 
 export class GlobeScene {
@@ -43,6 +49,12 @@ export class GlobeScene {
   public onSelectWeather?: (weather: any) => void;
   public onSelectMilitaryBase?: (base: any) => void;
   public onSelectOceanCurrent?: (curr: any) => void;
+  public onSelectCyclone?: (cyclone: CycloneItem) => void;
+  public onSelectDisaster?: (disaster: DisasterItem) => void;
+  public onSelectFault?: (fault: any) => void;
+
+  private cycloneTracker = new CycloneTracker();
+  private disasterTracker = new DisasterTracker();
 
   private currentStyle: 'dark' | 'sat' = 'dark';
   private currentProjection: 'globe' | 'mercator' = 'globe';
@@ -79,6 +91,9 @@ export class GlobeScene {
     ocean_currents: true,
     doppler_radar: true,
     military_bases: true,
+    cyclones: true,
+    disasters: true,
+    faults: true,
   };
 
   constructor(container: HTMLElement) {
@@ -121,6 +136,9 @@ export class GlobeScene {
       this.initOceanCurrentsLayer();
       this.initDopplerRadarLayer();
       this.initMilitaryBasesLayer();
+      this.initTectonicPlatesLayer();
+      this.initCyclonesLayer();
+      this.initDisastersLayer();
 
       // Initialize floating CCTV preview cards
       this.previewManager = new CctvPreviewsManager(this.map, this.container, (cam) => {
@@ -524,7 +542,29 @@ export class GlobeScene {
   private async initEarthquakeLayer(): Promise<void> {
     try {
       const res = await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson');
-      const data = await res.json();
+      const rawData = await res.json();
+
+      // Enrich features with focal depth categorization (<70km shallow, 70-300km intermediate, >300km deep)
+      const features = (rawData.features || []).map((f: any) => {
+        const coords = f.geometry?.coordinates || [0, 0, 10];
+        const depth = Math.round(coords[2] || 10);
+        const isShallow = depth < 70;
+        const isDeep = depth > 300;
+        const tsunamiAlert = f.properties?.tsunami === 1;
+
+        return {
+          ...f,
+          properties: {
+            ...f.properties,
+            depth,
+            depthCategory: isShallow ? 'SHALLOW (<70km)' : isDeep ? 'DEEP (>300km)' : 'INTERMEDIATE (70-300km)',
+            depthColor: isShallow ? '#ef4444' : isDeep ? '#3b82f6' : '#f59e0b',
+            tsunamiAlert,
+          },
+        };
+      });
+
+      const data = { ...rawData, features };
 
       this.map.addSource('earthquakes', {
         type: 'geojson',
@@ -536,14 +576,9 @@ export class GlobeScene {
         type: 'circle',
         source: 'earthquakes',
         paint: {
-          'circle-radius': ['interpolate', ['linear'], ['get', 'mag'], 2.5, 8, 5.0, 16, 7.0, 28],
-          'circle-color': [
-            'step', ['get', 'mag'],
-            '#eab308', 4.5,
-            '#f97316', 6.0,
-            '#ef4444'
-          ],
-          'circle-opacity': 0.3,
+          'circle-radius': ['interpolate', ['linear'], ['get', 'mag'], 2.5, 9, 5.0, 18, 7.0, 32],
+          'circle-color': ['get', 'depthColor'],
+          'circle-opacity': 0.35,
           'circle-blur': 0.8,
         },
       });
@@ -553,15 +588,10 @@ export class GlobeScene {
         type: 'circle',
         source: 'earthquakes',
         paint: {
-          'circle-radius': ['interpolate', ['linear'], ['get', 'mag'], 2.5, 4, 5.0, 8, 7.0, 15],
-          'circle-color': [
-            'step', ['get', 'mag'],
-            '#eab308', 4.5,
-            '#f97316', 6.0,
-            '#ef4444'
-          ],
-          'circle-opacity': 0.9,
-          'circle-stroke-width': 1.5,
+          'circle-radius': ['interpolate', ['linear'], ['get', 'mag'], 2.5, 4, 5.0, 8, 7.0, 16],
+          'circle-color': ['get', 'depthColor'],
+          'circle-opacity': 0.92,
+          'circle-stroke-width': 1.6,
           'circle-stroke-color': '#000000',
         },
       });
@@ -573,14 +603,14 @@ export class GlobeScene {
         minzoom: 3,
         filter: ['>=', ['get', 'mag'], 4.0],
         layout: {
-          'text-field': ['concat', 'M', ['to-string', ['get', 'mag']]],
+          'text-field': ['concat', 'M', ['to-string', ['get', 'mag']], '\n', ['to-string', ['get', 'depth']], 'km'],
           'text-size': 9,
-          'text-offset': [0, 1.4],
+          'text-offset': [0, 1.5],
         },
         paint: {
-          'text-color': '#f59e0b',
+          'text-color': '#fbbf24',
           'text-halo-color': '#000000',
-          'text-halo-width': 1,
+          'text-halo-width': 1.5,
         },
       });
 
@@ -954,10 +984,34 @@ export class GlobeScene {
       const military = data.military_flights || [];
 
       this.flightData = {
-        commercial: commercial.map((f: any) => ({ ...f, category: 'commercial' })),
-        private: privateFl.map((f: any) => ({ ...f, category: 'private' })),
-        jets: jets.map((f: any) => ({ ...f, category: 'jets' })),
-        military: military.map((f: any) => ({ ...f, category: 'military' })),
+        commercial: commercial.map((f: any, idx: number) => ({
+          ...f,
+          id: f.id || f.icao24 || f.callsign || `com-${idx}`,
+          lat: Number(f.lat) || 0,
+          lng: Number(f.lng) || 0,
+          category: 'commercial',
+        })),
+        private: privateFl.map((f: any, idx: number) => ({
+          ...f,
+          id: f.id || f.icao24 || f.callsign || `prv-${idx}`,
+          lat: Number(f.lat) || 0,
+          lng: Number(f.lng) || 0,
+          category: 'private',
+        })),
+        jets: jets.map((f: any, idx: number) => ({
+          ...f,
+          id: f.id || f.icao24 || f.callsign || `jet-${idx}`,
+          lat: Number(f.lat) || 0,
+          lng: Number(f.lng) || 0,
+          category: 'jets',
+        })),
+        military: military.map((f: any, idx: number) => ({
+          ...f,
+          id: f.id || f.icao24 || f.callsign || `mil-${idx}`,
+          lat: Number(f.lat) || 0,
+          lng: Number(f.lng) || 0,
+          category: 'military',
+        })),
       };
 
       this.pushFlightFeaturesToMap();
@@ -989,6 +1043,9 @@ export class GlobeScene {
           coordinates: [f.lng, f.lat],
         },
         properties: {
+          id: f.id,
+          lat: f.lat,
+          lng: f.lng,
           callsign: f.callsign || 'UNKNOWN',
           heading: f.heading || 0,
           alt: f.alt || 0,
@@ -1342,8 +1399,8 @@ export class GlobeScene {
 
   private async initDopplerRadarLayer(): Promise<void> {
     try {
-      // Dynamic RainViewer live radar composite
-      let radarTime = Math.floor(Date.now() / 1000) - 600; // default 10 mins ago
+      let radarTime = Math.floor(Date.now() / 1000) - 600;
+      let radarPath = `/v2/radar/${radarTime}`;
       try {
         const controller = new AbortController();
         const tid = setTimeout(() => controller.abort(), 4000);
@@ -1352,20 +1409,24 @@ export class GlobeScene {
         if (res.ok) {
           const json = await res.json();
           if (json.radar && json.radar.past && json.radar.past.length > 0) {
-            radarTime = json.radar.past[json.radar.past.length - 1].time;
+            const latest = json.radar.past[json.radar.past.length - 1];
+            radarTime = latest.time;
+            radarPath = latest.path || `/v2/radar/${radarTime}`;
           }
         }
       } catch (e) {
         console.warn('[GlobeScene] RainViewer API fallback to time offset:', e);
       }
 
-      const tileUrl = `https://tilecache.rainviewer.com/v2/radar/${radarTime}/256/{z}/{x}/{y}/2/1_1.png`;
+      const tileUrl = `https://tilecache.rainviewer.com${radarPath}/256/{z}/{x}/{y}/2/1_1.png`;
 
       if (!this.map.getSource('doppler-radar-source')) {
         this.map.addSource('doppler-radar-source', {
           type: 'raster',
           tiles: [tileUrl],
           tileSize: 256,
+          minzoom: 0,
+          maxzoom: 7, // CRITICAL: Never request tiles beyond zoom 7 to prevent "Zoom Level Not Supported" error!
         });
 
         this.map.addLayer({
@@ -1374,15 +1435,51 @@ export class GlobeScene {
           source: 'doppler-radar-source',
           paint: {
             'raster-opacity': 0.72,
-            'raster-fade-duration': 300,
+            'raster-fade-duration': 250,
           },
           layout: {
-            visibility: 'visible',
+            visibility: this.layerStates.doppler_radar ? 'visible' : 'none',
           },
         });
       }
     } catch (e) {
       console.warn('[GlobeScene] Doppler radar initialization error:', e);
+    }
+  }
+
+  public setDopplerRadarFrame(pathOrTime: string): void {
+    if (!this.map || this.isDestroyed) return;
+    const path = pathOrTime.startsWith('/v2/') ? pathOrTime : `/v2/radar/${pathOrTime}`;
+    const tileUrl = `https://tilecache.rainviewer.com${path}/256/{z}/{x}/{y}/2/1_1.png`;
+    const src = this.map.getSource('doppler-radar-source') as any;
+    if (src && typeof src.setTiles === 'function') {
+      src.setTiles([tileUrl]);
+    } else {
+      if (this.map.getLayer('doppler-radar-layer')) {
+        this.map.removeLayer('doppler-radar-layer');
+      }
+      if (this.map.getSource('doppler-radar-source')) {
+        this.map.removeSource('doppler-radar-source');
+      }
+      this.map.addSource('doppler-radar-source', {
+        type: 'raster',
+        tiles: [tileUrl],
+        tileSize: 256,
+        minzoom: 0,
+        maxzoom: 7,
+      });
+      this.map.addLayer({
+        id: 'doppler-radar-layer',
+        type: 'raster',
+        source: 'doppler-radar-source',
+        paint: {
+          'raster-opacity': 0.72,
+          'raster-fade-duration': 150,
+        },
+        layout: {
+          visibility: this.layerStates.doppler_radar ? 'visible' : 'none',
+        },
+      });
     }
   }
 
@@ -1465,6 +1562,318 @@ export class GlobeScene {
       });
     } catch (e) {
       console.warn('[GlobeScene] Military bases layer init error:', e);
+    }
+  }
+
+  private initTectonicPlatesLayer(): void {
+    try {
+      if (!this.map.getSource('tectonic-plates-source')) {
+        this.map.addSource('tectonic-plates-source', {
+          type: 'geojson',
+          data: tectonicPlatesGeoJson as any,
+        });
+      }
+
+      // Outer amber blur glow
+      if (!this.map.getLayer('tectonic-faults-glow')) {
+        this.map.addLayer({
+          id: 'tectonic-faults-glow',
+          type: 'line',
+          source: 'tectonic-plates-source',
+          paint: {
+            'line-color': '#f59e0b',
+            'line-width': 4.5,
+            'line-opacity': 0.38,
+            'line-blur': 2.5,
+          },
+          layout: {
+            visibility: this.layerStates.faults ? 'visible' : 'none',
+          },
+        });
+      }
+
+      // Sharp glowing fault core line
+      if (!this.map.getLayer('tectonic-faults-line')) {
+        this.map.addLayer({
+          id: 'tectonic-faults-line',
+          type: 'line',
+          source: 'tectonic-plates-source',
+          paint: {
+            'line-color': '#fbbf24',
+            'line-width': 1.8,
+            'line-opacity': 0.88,
+          },
+          layout: {
+            visibility: this.layerStates.faults ? 'visible' : 'none',
+          },
+        });
+      }
+
+      // Plate fault labels at zoom >= 3.5
+      if (!this.map.getLayer('tectonic-faults-label')) {
+        this.map.addLayer({
+          id: 'tectonic-faults-label',
+          type: 'symbol',
+          source: 'tectonic-plates-source',
+          minzoom: 3.5,
+          layout: {
+            'symbol-placement': 'line',
+            'text-field': ['get', 'Name'],
+            'text-size': 9.5,
+            'text-letter-spacing': 0.1,
+            'text-max-angle': 30,
+            visibility: this.layerStates.faults ? 'visible' : 'none',
+          },
+          paint: {
+            'text-color': '#f59e0b',
+            'text-halo-color': '#000000',
+            'text-halo-width': 2,
+          },
+        });
+      }
+
+      this.map.on('click', 'tectonic-faults-line', (e) => {
+        const feat = e.features?.[0];
+        if (feat && feat.properties) {
+          const p = feat.properties;
+          this.onSelectFault?.(p);
+        }
+      });
+    } catch (e) {
+      console.warn('[GlobeScene] Tectonic plates initialization error:', e);
+    }
+  }
+
+  private async initCyclonesLayer(): Promise<void> {
+    try {
+      await this.cycloneTracker.fetchActiveCyclones();
+
+      if (!this.map.getSource('cyclones-source')) {
+        this.map.addSource('cyclones-source', {
+          type: 'geojson',
+          data: this.cycloneTracker.toGeoJSON(),
+        });
+      }
+
+      if (!this.map.getSource('cyclone-radii-source')) {
+        this.map.addSource('cyclone-radii-source', {
+          type: 'geojson',
+          data: this.cycloneTracker.toWindRadiiGeoJSON(),
+        });
+      }
+
+      // Wind field radius polygons (gale & storm wind cones)
+      if (!this.map.getLayer('cyclone-wind-radii-layer')) {
+        this.map.addLayer({
+          id: 'cyclone-wind-radii-layer',
+          type: 'fill',
+          source: 'cyclone-radii-source',
+          paint: {
+            'fill-color': [
+              'case',
+              ['==', ['get', 'radiusType'], 'storm'],
+              '#ef4444',
+              '#f97316'
+            ],
+            'fill-opacity': [
+              'case',
+              ['==', ['get', 'radiusType'], 'storm'],
+              0.28,
+              0.16
+            ],
+            'fill-outline-color': '#fb923c',
+          },
+          layout: {
+            visibility: this.layerStates.cyclones ? 'visible' : 'none',
+          },
+        });
+      }
+
+      // Forecast track line glow
+      if (!this.map.getLayer('cyclone-track-glow')) {
+        this.map.addLayer({
+          id: 'cyclone-track-glow',
+          type: 'line',
+          source: 'cyclones-source',
+          filter: ['==', ['get', 'role'], 'track-line'],
+          paint: {
+            'line-color': '#38bdf8',
+            'line-width': 5,
+            'line-opacity': 0.35,
+            'line-blur': 2,
+          },
+          layout: {
+            visibility: this.layerStates.cyclones ? 'visible' : 'none',
+          },
+        });
+      }
+
+      // Forecast track line core
+      if (!this.map.getLayer('cyclone-track-line')) {
+        this.map.addLayer({
+          id: 'cyclone-track-line',
+          type: 'line',
+          source: 'cyclones-source',
+          filter: ['==', ['get', 'role'], 'track-line'],
+          paint: {
+            'line-color': '#38bdf8',
+            'line-width': 2.2,
+            'line-dasharray': [2, 2],
+          },
+          layout: {
+            visibility: this.layerStates.cyclones ? 'visible' : 'none',
+          },
+        });
+      }
+
+      // Eye center danger point
+      if (!this.map.getLayer('cyclone-symbol-layer')) {
+        this.map.addLayer({
+          id: 'cyclone-symbol-layer',
+          type: 'circle',
+          source: 'cyclones-source',
+          filter: ['==', ['get', 'role'], 'eye'],
+          paint: {
+            'circle-radius': ['interpolate', ['linear'], ['get', 'category'], 0, 7, 3, 11, 5, 16],
+            'circle-color': [
+              'case',
+              ['>=', ['get', 'category'], 4],
+              '#dc2626',
+              ['>=', ['get', 'category'], 2],
+              '#ea580c',
+              '#f59e0b'
+            ],
+            'circle-stroke-color': '#ffffff',
+            'circle-stroke-width': 2,
+          },
+          layout: {
+            visibility: this.layerStates.cyclones ? 'visible' : 'none',
+          },
+        });
+      }
+
+      // Cyclone Labels
+      if (!this.map.getLayer('cyclone-label-layer')) {
+        this.map.addLayer({
+          id: 'cyclone-label-layer',
+          type: 'symbol',
+          source: 'cyclones-source',
+          filter: ['==', ['get', 'role'], 'eye'],
+          layout: {
+            'text-field': ['concat', '🌀 ', ['get', 'name'], ' // ', ['to-string', ['get', 'windKmh']], ' KM/H'],
+            'text-size': 11,
+            'text-offset': [0, 1.8],
+            'text-allow-overlap': true,
+            visibility: this.layerStates.cyclones ? 'visible' : 'none',
+          },
+          paint: {
+            'text-color': '#fb923c',
+            'text-halo-color': '#000000',
+            'text-halo-width': 2,
+          },
+        });
+      }
+
+      this.map.on('click', 'cyclone-symbol-layer', (e) => {
+        const feat = e.features?.[0];
+        if (feat && feat.properties) {
+          this.onSelectCyclone?.(feat.properties as any);
+        }
+      });
+    } catch (e) {
+      console.warn('[GlobeScene] Cyclone layer initialization error:', e);
+    }
+  }
+
+  private async initDisastersLayer(): Promise<void> {
+    try {
+      await this.disasterTracker.fetchDisasters();
+
+      if (!this.map.getSource('disasters-source')) {
+        this.map.addSource('disasters-source', {
+          type: 'geojson',
+          data: this.disasterTracker.toGeoJSON(),
+        });
+      }
+
+      // Outer pulsating danger glow
+      if (!this.map.getLayer('disaster-glow-layer')) {
+        this.map.addLayer({
+          id: 'disaster-glow-layer',
+          type: 'circle',
+          source: 'disasters-source',
+          paint: {
+            'circle-radius': 14,
+            'circle-color': [
+              'match', ['get', 'category'],
+              'volcano', '#ef4444',
+              'wildfire', '#f97316',
+              'flood', '#06b6d4',
+              '#eab308'
+            ],
+            'circle-opacity': 0.35,
+            'circle-blur': 1,
+          },
+          layout: {
+            visibility: this.layerStates.disasters ? 'visible' : 'none',
+          },
+        });
+      }
+
+      // Center disaster dot
+      if (!this.map.getLayer('disaster-symbol-layer')) {
+        this.map.addLayer({
+          id: 'disaster-symbol-layer',
+          type: 'circle',
+          source: 'disasters-source',
+          paint: {
+            'circle-radius': 6,
+            'circle-color': [
+              'match', ['get', 'category'],
+              'volcano', '#dc2626',
+              'wildfire', '#ea580c',
+              'flood', '#0891b2',
+              '#f59e0b'
+            ],
+            'circle-stroke-color': '#ffffff',
+            'circle-stroke-width': 1.5,
+          },
+          layout: {
+            visibility: this.layerStates.disasters ? 'visible' : 'none',
+          },
+        });
+      }
+
+      // Disaster Label
+      if (!this.map.getLayer('disaster-label-layer')) {
+        this.map.addLayer({
+          id: 'disaster-label-layer',
+          type: 'symbol',
+          source: 'disasters-source',
+          minzoom: 3.5,
+          layout: {
+            'text-field': ['get', 'title'],
+            'text-size': 9.5,
+            'text-offset': [0, 1.4],
+            'text-allow-overlap': false,
+            visibility: this.layerStates.disasters ? 'visible' : 'none',
+          },
+          paint: {
+            'text-color': '#ffffff',
+            'text-halo-color': '#000000',
+            'text-halo-width': 1.8,
+          },
+        });
+      }
+
+      this.map.on('click', 'disaster-symbol-layer', (e) => {
+        const feat = e.features?.[0];
+        if (feat && feat.properties) {
+          this.onSelectDisaster?.(feat.properties as any);
+        }
+      });
+    } catch (e) {
+      console.warn('[GlobeScene] Disaster layer initialization error:', e);
     }
   }
 
@@ -1588,6 +1997,117 @@ export class GlobeScene {
       duration: 1800,
       essential: true,
     });
+  }
+
+  public highlightFlight(flight: any): void {
+    if (!this.map || !flight) return;
+    const lat = Number(flight.lat);
+    const lng = Number(flight.lng);
+    if (isNaN(lat) || isNaN(lng)) return;
+
+    const callsign = String(flight.callsign || flight.icao24 || 'UNKNOWN').toUpperCase();
+    const altFt = Math.round((Number(flight.alt) || 0) * 3.28084).toLocaleString() + ' FT';
+    const speedKts = Math.round(Number(flight.speed_knots) || 0).toString();
+
+    const feature = {
+      type: 'Feature' as const,
+      geometry: {
+        type: 'Point' as const,
+        coordinates: [lng, lat],
+      },
+      properties: {
+        callsign,
+        altFt,
+        speedKnots: speedKts,
+        model: flight.model || 'AIRCRAFT',
+      },
+    };
+
+    const targetGeoJson = {
+      type: 'FeatureCollection' as const,
+      features: [feature],
+    };
+
+    const src = this.map.getSource('flight-intercept-source') as any;
+    if (src) {
+      src.setData(targetGeoJson);
+    } else {
+      this.map.addSource('flight-intercept-source', {
+        type: 'geojson',
+        data: targetGeoJson,
+      });
+
+      // Outer radar pulse circle
+      this.map.addLayer({
+        id: 'flight-intercept-ring',
+        type: 'circle',
+        source: 'flight-intercept-source',
+        paint: {
+          'circle-radius': 30,
+          'circle-color': 'rgba(56, 189, 248, 0.12)',
+          'circle-stroke-color': '#38bdf8',
+          'circle-stroke-width': 2.2,
+          'circle-stroke-opacity': 0.95,
+        },
+      });
+
+      // Center lock dot
+      this.map.addLayer({
+        id: 'flight-intercept-dot',
+        type: 'circle',
+        source: 'flight-intercept-source',
+        paint: {
+          'circle-radius': 6,
+          'circle-color': '#38bdf8',
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 2,
+        },
+      });
+
+      // Tactical HUD text label
+      this.map.addLayer({
+        id: 'flight-intercept-hud',
+        type: 'symbol',
+        source: 'flight-intercept-source',
+        layout: {
+          'text-field': ['concat', '🎯 LOCK // ', ['get', 'callsign'], '\n', ['get', 'altFt'], ' | ', ['get', 'speedKnots'], ' KTS'],
+          'text-size': 11,
+          'text-offset': [0, 2.2],
+          'text-allow-overlap': true,
+          'text-ignore-placement': true,
+        },
+        paint: {
+          'text-color': '#38bdf8',
+          'text-halo-color': '#000000',
+          'text-halo-width': 2,
+        },
+      });
+    }
+
+    // Ensure layers are visible
+    ['flight-intercept-ring', 'flight-intercept-dot', 'flight-intercept-hud'].forEach((id) => {
+      if (this.map.getLayer(id)) {
+        this.map.setLayoutProperty(id, 'visibility', 'visible');
+      }
+    });
+
+    // Directly fly 3D globe camera right to the aircraft position
+    this.map.flyTo({
+      center: [lng, lat],
+      zoom: 9.5,
+      pitch: 48,
+      bearing: typeof flight.heading === 'number' ? flight.heading : 0,
+      duration: 1800,
+      essential: true,
+    });
+  }
+
+  public clearFlightHighlight(): void {
+    if (!this.map) return;
+    const src = this.map.getSource('flight-intercept-source') as any;
+    if (src) {
+      src.setData({ type: 'FeatureCollection', features: [] });
+    }
   }
 
   public getAllFlights(): any[] {
@@ -1867,6 +2387,21 @@ export class GlobeScene {
         milLayers.forEach((id) => {
           if (this.map.getLayer(id)) this.map.setLayoutProperty(id, 'visibility', vis);
         });
+      } else if (layerKey === 'cyclones') {
+        const cycloneLayers = ['cyclone-wind-radii-layer', 'cyclone-track-glow', 'cyclone-track-line', 'cyclone-symbol-layer', 'cyclone-label-layer'];
+        cycloneLayers.forEach((id) => {
+          if (this.map.getLayer(id)) this.map.setLayoutProperty(id, 'visibility', vis);
+        });
+      } else if (layerKey === 'disasters') {
+        const disasterLayers = ['disaster-glow-layer', 'disaster-symbol-layer', 'disaster-label-layer'];
+        disasterLayers.forEach((id) => {
+          if (this.map.getLayer(id)) this.map.setLayoutProperty(id, 'visibility', vis);
+        });
+      } else if (layerKey === 'faults') {
+        const faultLayers = ['tectonic-faults-glow', 'tectonic-faults-line', 'tectonic-faults-label'];
+        faultLayers.forEach((id) => {
+          if (this.map.getLayer(id)) this.map.setLayoutProperty(id, 'visibility', vis);
+        });
       }
     } catch (e) {
       console.warn(`[GlobeScene] Toggle layer ${layerKey} error:`, e);
@@ -1883,6 +2418,18 @@ export class GlobeScene {
 
   public toggleMilitaryBases(visible: boolean): void {
     this.toggleLayer('military_bases', visible);
+  }
+
+  public toggleCyclones(visible: boolean): void {
+    this.toggleLayer('cyclones', visible);
+  }
+
+  public toggleDisasters(visible: boolean): void {
+    this.toggleLayer('disasters', visible);
+  }
+
+  public toggleFaults(visible: boolean): void {
+    this.toggleLayer('faults', visible);
   }
 
   public setProjection(proj: 'globe' | 'mercator'): void {

@@ -5,7 +5,7 @@ export interface FlightItem {
   model: string;
   registration?: string;
   operator?: string;
-  category: 'commercial' | 'military' | 'private' | 'business';
+  category: 'commercial' | 'military' | 'private' | 'business' | string;
   lat: number;
   lng: number;
   alt: number; // metres
@@ -26,6 +26,12 @@ export class FlightWatchPanel {
   private onLocateFlight: (flight: FlightItem) => void;
   private onFilterChange?: (filterCategory: string) => void;
 
+  private listContainerEl!: HTMLElement;
+  private searchInputEl!: HTMLInputElement;
+  private counterPillEl!: HTMLElement;
+  private tabButtons: Map<string, HTMLButtonElement> = new Map();
+  private lockedFlightId: string | null = null;
+
   constructor(
     parent: HTMLElement,
     onLocateFlight: (flight: FlightItem) => void,
@@ -38,9 +44,12 @@ export class FlightWatchPanel {
   }
 
   public updateFlights(flights: FlightItem[]): void {
-    this.flights = flights;
+    this.flights = flights.map((f, idx) => ({
+      ...f,
+      id: f.id || f.icao24 || f.callsign || `fl-${idx}`,
+    }));
     if (this.isVisible) {
-      this.updateContent();
+      this.updateList();
     }
   }
 
@@ -49,16 +58,135 @@ export class FlightWatchPanel {
     this.panelEl.className = 'flight-watch-panel glass-panel';
     this.panelEl.style.display = 'none';
 
-    this.updateContent();
+    this.panelEl.innerHTML = `
+      <div class="flight-watch-header">
+        <div class="flight-watch-title">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--accent-cyan)" stroke-width="2">
+            <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"></path>
+          </svg>
+          <span>AIR RADAR WATCHLIST</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="flight-counter-pill" id="flight-counter-pill">0 RADAR</span>
+          <button class="panel-close-btn" id="flight-panel-close">&times;</button>
+        </div>
+      </div>
+
+      <!-- Search Box with Intercept Action -->
+      <div class="flight-search-container">
+        <input 
+          type="text" 
+          id="flight-search-input" 
+          class="flight-search-input" 
+          placeholder="Enter Callsign (e.g. UIA8709), ICAO24..." 
+        />
+      </div>
+
+      <!-- Filter Tabs -->
+      <div class="flight-filter-tabs">
+        <button class="flight-tab-btn active" data-cat="all">ALL</button>
+        <button class="flight-tab-btn" data-cat="military">MILITARY</button>
+        <button class="flight-tab-btn" data-cat="emergency">SQUAWK 7700</button>
+        <button class="flight-tab-btn" data-cat="commercial">COMMERCIAL</button>
+      </div>
+
+      <!-- Flight List -->
+      <div class="flight-items-list styled-scrollbar" id="flight-items-list">
+        <div class="flight-empty">Awaiting ADS-B telemetry...</div>
+      </div>
+    `;
+
     this.container.appendChild(this.panelEl);
+
+    // Cache elements
+    this.listContainerEl = this.panelEl.querySelector('#flight-items-list') as HTMLElement;
+    this.searchInputEl = this.panelEl.querySelector('#flight-search-input') as HTMLInputElement;
+    this.counterPillEl = this.panelEl.querySelector('#flight-counter-pill') as HTMLElement;
+
+    // Tab buttons
+    this.panelEl.querySelectorAll('.flight-tab-btn').forEach((btn) => {
+      const cat = btn.getAttribute('data-cat') || 'all';
+      this.tabButtons.set(cat, btn as HTMLButtonElement);
+      btn.addEventListener('click', () => {
+        this.currentFilter = cat;
+        this.tabButtons.forEach((b, c) => b.classList.toggle('active', c === cat));
+        this.onFilterChange?.(cat);
+        this.updateList();
+      });
+    });
+
+    // Close button
+    this.panelEl.querySelector('#flight-panel-close')?.addEventListener('click', () => {
+      this.hide();
+    });
+
+    // Search input listener with real-time auto intercept
+    this.searchInputEl.addEventListener('input', () => {
+      this.searchQuery = this.searchInputEl.value;
+      this.updateList();
+
+      const qClean = this.searchQuery.trim().toLowerCase();
+      if (qClean.length >= 3) {
+        // Find exact match first
+        const exactMatch = this.flights.find(
+          (f) => f.callsign.toLowerCase() === qClean || f.icao24.toLowerCase() === qClean
+        );
+        if (exactMatch) {
+          this.executeIntercept(exactMatch);
+        }
+      }
+    });
+
+    // Enter key triggers immediate flight intercept to best match
+    this.searchInputEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        const qClean = this.searchQuery.trim().toLowerCase();
+        if (!qClean) return;
+
+        const matched =
+          this.flights.find(
+            (f) => f.callsign.toLowerCase() === qClean || f.icao24.toLowerCase() === qClean
+          ) ||
+          this.flights.find(
+            (f) => f.callsign.toLowerCase().includes(qClean) || f.icao24.toLowerCase().includes(qClean)
+          );
+
+        if (matched) {
+          this.executeIntercept(matched);
+        }
+      }
+    });
   }
 
-  private updateContent(): void {
+  private executeIntercept(flight: FlightItem): void {
+    this.lockedFlightId = flight.id;
+    this.onLocateFlight(flight);
+
+    // Update locked class on cards
+    this.listContainerEl.querySelectorAll('.flight-card').forEach((c) => {
+      if (c.getAttribute('data-id') === flight.id) {
+        c.classList.add('is-locked');
+        c.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      } else {
+        c.classList.remove('is-locked');
+      }
+    });
+  }
+
+  private updateList(): void {
     const totalCount = this.flights.length;
     const milCount = this.flights.filter((f) => f.category === 'military').length;
     const emgCount = this.flights.filter(
       (f) => f.squawk === '7700' || f.squawk === '7600' || f.squawk === '7500'
     ).length;
+
+    // Update tab counts
+    const allTab = this.tabButtons.get('all');
+    if (allTab) allTab.textContent = `ALL (${totalCount.toLocaleString()})`;
+    const milTab = this.tabButtons.get('military');
+    if (milTab) milTab.textContent = `MILITARY (${milCount})`;
+    const emgTab = this.tabButtons.get('emergency');
+    if (emgTab) emgTab.textContent = `SQUAWK 7700 (${emgCount})`;
 
     let filtered = this.flights;
 
@@ -83,136 +211,72 @@ export class FlightWatchPanel {
       );
     }
 
+    if (this.counterPillEl) {
+      this.counterPillEl.textContent = `${filtered.length.toLocaleString()} RADAR`;
+    }
+
     // Limit displayed items to top 100 for high performance
     const displayList = filtered.slice(0, 100);
 
-    this.panelEl.innerHTML = `
-      <div class="flight-watch-header">
-        <div class="flight-watch-title">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="var(--accent-cyan)" stroke-width="2">
-            <path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"></path>
-          </svg>
-          <span>AIR RADAR WATCHLIST</span>
+    if (displayList.length === 0) {
+      this.listContainerEl.innerHTML = `
+        <div class="flight-empty">
+          <div>No aircraft found matching "${this.searchQuery}"</div>
+          <div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:4px;">Check callsign or try another flight code</div>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <span class="flight-counter-pill">${filtered.length.toLocaleString()} RADAR</span>
-          <button class="panel-close-btn" id="flight-panel-close">&times;</button>
-        </div>
-      </div>
-
-      <!-- Search Box -->
-      <div class="flight-search-container">
-        <input 
-          type="text" 
-          id="flight-search-input" 
-          class="flight-search-input" 
-          placeholder="Filter Callsign, Model, ICAO24..." 
-          value="${this.searchQuery}"
-        />
-      </div>
-
-      <!-- Filter Tabs -->
-      <div class="flight-filter-tabs">
-        <button class="flight-tab-btn ${this.currentFilter === 'all' ? 'active' : ''}" data-cat="all">ALL (${totalCount.toLocaleString()})</button>
-        <button class="flight-tab-btn ${this.currentFilter === 'military' ? 'active' : ''}" data-cat="military">MILITARY (${milCount})</button>
-        <button class="flight-tab-btn ${this.currentFilter === 'emergency' ? 'active' : ''}" data-cat="emergency">SQUAWK 7700 (${emgCount})</button>
-        <button class="flight-tab-btn ${this.currentFilter === 'commercial' ? 'active' : ''}" data-cat="commercial">COMMERCIAL</button>
-      </div>
-
-      <!-- Flight List -->
-      <div class="flight-items-list styled-scrollbar">
-        ${
-          displayList.length === 0
-            ? '<div class="flight-empty">No aircraft matched query</div>'
-            : displayList
-                .map((f) => {
-                  const altFt = Math.round(f.alt * 3.28084);
-                  const isMil = f.category === 'military';
-                  const isEmg = f.squawk === '7700' || f.squawk === '7600';
-                  return `
-            <div class="flight-card ${isMil ? 'is-mil' : ''} ${isEmg ? 'is-emergency' : ''}" data-id="${f.id}">
-              <div class="flight-card-head">
-                <span class="flight-callsign">${f.callsign || f.icao24.toUpperCase()}</span>
-                <span class="flight-type-code">${f.model || 'AC'}</span>
-                ${isMil ? '<span class="flight-mil-badge">AIR DEFENSE</span>' : ''}
-                ${isEmg ? '<span class="flight-emg-badge">EMERGENCY 7700</span>' : ''}
-                <button class="flight-track-btn" data-id="${f.id}" title="Focus on Flight">
-                  🎯
-                </button>
-              </div>
-              <div class="flight-card-stats">
-                <div class="flight-stat-item">
-                  <span class="stat-k">ALT:</span>
-                  <span class="stat-v">${altFt.toLocaleString()} ft</span>
-                </div>
-                <div class="flight-stat-item">
-                  <span class="stat-k">SPD:</span>
-                  <span class="stat-v">${Math.round(f.speed_knots)} kts</span>
-                </div>
-                <div class="flight-stat-item">
-                  <span class="stat-k">HDG:</span>
-                  <span class="stat-v">${Math.round(f.heading)}°</span>
-                </div>
-                <div class="flight-stat-item">
-                  <span class="stat-k">SQK:</span>
-                  <span class="stat-v ${isEmg ? 'is-sqk-alert' : ''}">${f.squawk || 'AUTO'}</span>
-                </div>
-              </div>
-            </div>
-          `;
-                })
-                .join('')
-        }
-      </div>
-    `;
-
-    // Listeners
-    this.panelEl.querySelector('#flight-panel-close')?.addEventListener('click', () => {
-      this.hide();
-    });
-
-    const searchInput = this.panelEl.querySelector('#flight-search-input') as HTMLInputElement;
-    if (searchInput) {
-      searchInput.addEventListener('input', (e) => {
-        this.searchQuery = (e.target as HTMLInputElement).value;
-        this.updateContent();
-        // Re-focus and preserve cursor
-        const nextInput = this.panelEl.querySelector('#flight-search-input') as HTMLInputElement;
-        if (nextInput) {
-          nextInput.focus();
-          nextInput.setSelectionRange(this.searchQuery.length, this.searchQuery.length);
-        }
-      });
+      `;
+      return;
     }
 
-    const tabs = this.panelEl.querySelectorAll('.flight-tab-btn');
-    tabs.forEach((tab) => {
-      tab.addEventListener('click', (e) => {
-        this.currentFilter = (e.currentTarget as HTMLElement).getAttribute('data-cat') || 'all';
-        this.onFilterChange?.(this.currentFilter);
-        this.updateContent();
-      });
-    });
+    this.listContainerEl.innerHTML = displayList
+      .map((f) => {
+        const altFt = Math.round((f.alt || 0) * 3.28084);
+        const isMil = f.category === 'military';
+        const isEmg = f.squawk === '7700' || f.squawk === '7600';
+        const isLocked = this.lockedFlightId === f.id;
 
-    const trackBtns = this.panelEl.querySelectorAll('.flight-track-btn');
-    trackBtns.forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const id = (e.currentTarget as HTMLElement).getAttribute('data-id');
-        const flight = this.flights.find((f) => f.id === id);
-        if (flight) {
-          this.onLocateFlight(flight);
-        }
-      });
-    });
+        return `
+          <div class="flight-card ${isMil ? 'is-mil' : ''} ${isEmg ? 'is-emergency' : ''} ${isLocked ? 'is-locked' : ''}" data-id="${f.id}">
+            <div class="flight-card-head">
+              <span class="flight-callsign">${f.callsign || f.icao24.toUpperCase()}</span>
+              <span class="flight-type-code">${f.model || 'AIRCRAFT'}</span>
+              ${isMil ? '<span class="flight-mil-badge">AIR DEFENSE</span>' : ''}
+              ${isEmg ? '<span class="flight-emg-badge">EMERGENCY 7700</span>' : ''}
+              <button class="flight-track-btn" data-id="${f.id}" title="Direct Intercept & Lock Position">
+                🎯
+              </button>
+            </div>
+            <div class="flight-card-stats">
+              <div class="flight-stat-item">
+                <span class="stat-k">ALT:</span>
+                <span class="stat-v">${altFt.toLocaleString()} ft</span>
+              </div>
+              <div class="flight-stat-item">
+                <span class="stat-k">SPD:</span>
+                <span class="stat-v">${Math.round(f.speed_knots || 0)} kts</span>
+              </div>
+              <div class="flight-stat-item">
+                <span class="stat-k">HDG:</span>
+                <span class="stat-v">${Math.round(f.heading || 0)}°</span>
+              </div>
+              <div class="flight-stat-item">
+                <span class="stat-k">SQK:</span>
+                <span class="stat-v ${isEmg ? 'is-sqk-alert' : ''}">${f.squawk || 'AUTO'}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      })
+      .join('');
 
-    const cards = this.panelEl.querySelectorAll('.flight-card');
-    cards.forEach((card) => {
+    // Bind click events on all cards & target buttons
+    this.listContainerEl.querySelectorAll('.flight-card').forEach((card) => {
       card.addEventListener('click', (e) => {
-        const id = (e.currentTarget as HTMLElement).getAttribute('data-id');
+        const target = e.target as HTMLElement;
+        const id = card.getAttribute('data-id');
         const flight = this.flights.find((f) => f.id === id);
         if (flight) {
-          this.onLocateFlight(flight);
+          this.executeIntercept(flight);
         }
       });
     });
@@ -229,6 +293,10 @@ export class FlightWatchPanel {
   public show(): void {
     this.isVisible = true;
     this.panelEl.style.display = 'flex';
+    this.updateList();
+    setTimeout(() => {
+      this.searchInputEl?.focus();
+    }, 100);
   }
 
   public hide(): void {

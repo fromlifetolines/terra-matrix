@@ -207,6 +207,15 @@ class TerraMatrixApp {
             <button class="tactical-rail-btn active" id="rail-btn-radar" title="Toggle Weather Doppler Radar & dBZ Scale">
               <span>📡</span> DOPPLER
             </button>
+            <button class="tactical-rail-btn active" id="rail-btn-cyclones" title="Live Typhoons & Tropical Cyclones Tracking">
+              <span>🌀</span> CYCLONES
+            </button>
+            <button class="tactical-rail-btn active" id="rail-btn-disasters" title="Global Extreme Hazards (Volcanoes, Floods, Wildfires)">
+              <span>🌋</span> DISASTERS
+            </button>
+            <button class="tactical-rail-btn active" id="rail-btn-faults" title="Global Tectonic Plates & Active Fault Lines">
+              <span>⚡</span> FAULTS
+            </button>
             <button class="tactical-rail-btn active" id="rail-btn-currents" title="Toggle Global Ocean Currents">
               <span>🌊</span> CURRENTS
             </button>
@@ -541,6 +550,24 @@ class TerraMatrixApp {
       btnRadar.classList.toggle('active', isVis);
     });
 
+    const btnCyclones = document.getElementById('rail-btn-cyclones');
+    btnCyclones?.addEventListener('click', () => {
+      const active = btnCyclones.classList.toggle('active');
+      this.globeScene.toggleCyclones(active);
+    });
+
+    const btnDisasters = document.getElementById('rail-btn-disasters');
+    btnDisasters?.addEventListener('click', () => {
+      const active = btnDisasters.classList.toggle('active');
+      this.globeScene.toggleDisasters(active);
+    });
+
+    const btnFaults = document.getElementById('rail-btn-faults');
+    btnFaults?.addEventListener('click', () => {
+      const active = btnFaults.classList.toggle('active');
+      this.globeScene.toggleFaults(active);
+    });
+
     const btnCurrents = document.getElementById('rail-btn-currents');
     btnCurrents?.addEventListener('click', () => {
       const active = btnCurrents.classList.toggle('active');
@@ -646,7 +673,7 @@ class TerraMatrixApp {
     this.flightWatchPanel = new FlightWatchPanel(
       globeWrapper,
       (fl: FlightItem) => {
-        this.globeScene.focusCoordinates(fl.lat, fl.lng, 9, 45, fl.heading);
+        this.globeScene.highlightFlight(fl);
         this.globeScene.onSelectFlight?.(fl);
       },
       (filterCat: string) => {
@@ -685,17 +712,20 @@ class TerraMatrixApp {
       );
     }
 
-    // 10. Mount Doppler Radar Legend
+    // 10. Mount Doppler Radar Legend with 4D Animation Loop
     this.dopplerLegend = new DopplerRadarLegend({
       onToggleRadar: (en) => {
         this.globeScene.toggleDopplerRadar(en);
         const btn = document.getElementById('rail-btn-radar');
         btn?.classList.toggle('active', en);
       },
+      onFrameChange: (path) => {
+        this.globeScene.setDopplerRadarFrame(path);
+      },
     });
     this.dopplerLegend.init(globeWrapper);
 
-    // 11. Wire callbacks for Military Bases & Ocean Currents
+    // 11. Wire callbacks for Military Bases, Ocean Currents, Cyclones, Disasters & Faults
     this.globeScene.onSelectMilitaryBase = (base: any) => {
       this.showInfoCard({
         badge: `BASE // ${base.branch} [${base.country}]`,
@@ -726,6 +756,60 @@ class TerraMatrixApp {
           <div><b>Basin:</b> ${curr.basin}</div>
           <div><b>Velocity:</b> <span style="color:var(--accent-emerald);font-weight:700;">${curr.speed}</span> | <b>Temp:</b> ${curr.temp}</div>
           <div style="margin-top:4px;color:var(--text-muted);font-size:10.5px;">${curr.impact}</div>
+        `,
+      });
+    };
+
+    this.globeScene.onSelectCyclone = (c: any) => {
+      this.showInfoCard({
+        badge: `${c.alertLevel || 'CRITICAL'} // TROPICAL CYCLONE`,
+        badgeClass: 'CRITICAL',
+        title: `TYPHOON ${c.name || 'CYCLONE'}`,
+        content: `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:11px;margin-bottom:8px;">
+            <div><strong>Classification:</strong> ${c.classification || 'Typhoon'}</div>
+            <div><strong>Category:</strong> CAT ${c.category || 0}</div>
+            <div><strong>Central Pressure:</strong> ${c.pressureHpa || 950} hPa</div>
+            <div><strong>Sustained Wind:</strong> ${c.windKmh || 0} km/h (${c.windKnots || 0} kts)</div>
+            <div><strong>Basin:</strong> ${c.basin || 'Western Pacific'}</div>
+            <div><strong>Storm Radius:</strong> Gale 7-lvl (~280km)</div>
+          </div>
+          <div style="color:var(--accent-coral);">● 暴風半徑與未來預測路徑已投影於 3D 視界</div>
+        `,
+      });
+    };
+
+    this.globeScene.onSelectDisaster = (d: any) => {
+      const icon = d.category === 'volcano' ? '🌋' : d.category === 'flood' ? '🌊' : d.category === 'wildfire' ? '🔥' : '⚠️';
+      this.showInfoCard({
+        badge: `${String(d.severity || 'HIGH').toUpperCase()} // NATURAL HAZARD`,
+        badgeClass: d.severity === 'CRITICAL' ? 'CRITICAL' : 'ELEVATED',
+        title: `${icon} ${d.title}`,
+        content: `
+          <div style="font-size:11px;margin-bottom:8px;">
+            <div><strong>Event Type:</strong> ${d.type || d.category}</div>
+            <div><strong>Source Intelligence:</strong> ${d.source || 'NASA EONET / GDACS'}</div>
+            <div><strong>Detected Time:</strong> ${new Date(d.date).toLocaleString()}</div>
+            <div style="margin-top:6px;color:rgba(255,255,255,0.85);">${d.description || ''}</div>
+          </div>
+        `,
+        actionLabel: d.url ? '↗️ VIEW CRISIS BULLETIN' : undefined,
+        onAction: d.url ? () => window.open(d.url, '_blank') : undefined,
+      });
+    };
+
+    this.globeScene.onSelectFault = (f: any) => {
+      this.showInfoCard({
+        badge: 'GEODYNAMIC // TECTONIC BOUNDARY',
+        badgeClass: 'MONITOR',
+        title: `FAULT BOUNDARY: ${f.Name || 'TECTONIC PLATE'}`,
+        content: `
+          <div style="font-size:11px;margin-bottom:6px;">
+            <div><strong>Plates Involved:</strong> ${f.PlateA || 'A'} ↔ ${f.PlateB || 'B'}</div>
+            <div><strong>Boundary Mechanism:</strong> ${f.Type || 'Continental Margin / Subduction / Rift'}</div>
+            <div><strong>Geological Source:</strong> ${f.Source || 'PB2002 Global Plate Model'}</div>
+          </div>
+          <div style="color:var(--accent-amber);">● 環太平洋火山地震帶與主要構造斷裂帶</div>
         `,
       });
     };
