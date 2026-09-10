@@ -1041,6 +1041,28 @@ class TerraMatrixApp {
 }
 
 // Bootstrap
-window.addEventListener('DOMContentLoaded', () => {
-  new TerraMatrixApp();
-});
+function bootstrapTerraMatrix() {
+  try {
+    new TerraMatrixApp();
+  } catch (err) {
+    console.error('[TerraMatrix] Fatal bootstrap error:', err);
+    const appEl = document.getElementById('app');
+    if (appEl && (!appEl.hasChildNodes() || appEl.children.length === 0)) {
+      appEl.innerHTML = `
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#050507;color:#ef4444;font-family:monospace;text-align:center;padding:24px;box-sizing:border-box;">
+          <div style="font-size:32px;margin-bottom:12px;">⚠️</div>
+          <h2 style="font-size:18px;letter-spacing:0.1em;margin:0 0 8px 0;color:#f87171;">TERRA MATRIX // BOOTSTRAP ANOMALY</h2>
+          <p style="color:#9ca3af;max-width:560px;font-size:13px;line-height:1.6;margin:0 0 20px 0;">${(err as Error)?.message || 'Uncaught error during tactical engine initialization.'}</p>
+          <button onclick="location.reload()" style="background:rgba(16,185,129,0.15);border:1px solid #10b981;color:#10b981;padding:8px 18px;border-radius:4px;font-family:monospace;font-size:12px;font-weight:700;cursor:pointer;letter-spacing:0.05em;">RETRY REBOOT</button>
+        </div>
+      `;
+    }
+  }
+}
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', bootstrapTerraMatrix);
+} else {
+  bootstrapTerraMatrix();
+}
+
