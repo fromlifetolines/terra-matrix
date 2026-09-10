@@ -302,8 +302,8 @@ export class CctvExpandedModal {
         refreshSnapshot();
       });
 
-      // 5-second progress bar animation & trigger
-      const INTERVAL_MS = 5000;
+      // 2.5-second progress bar animation & trigger for ultra-responsive live movement
+      const INTERVAL_MS = 2500;
       let elapsedMs = 0;
       const STEP_MS = 100;
 
@@ -315,7 +315,7 @@ export class CctvExpandedModal {
           progressBar.style.width = `${pct}%`;
         }
 
-        const remainingSec = Math.max(0, Math.ceil((INTERVAL_MS - elapsedMs) / 1000));
+        const remainingSec = ((INTERVAL_MS - elapsedMs) / 1000).toFixed(1);
         if (badge) {
           badge.innerHTML = `<span class="cctv-modal-live-dot mini" style="background:#38bdf8;"></span> ⏱️ SNAPSHOT (REFRESH IN ${remainingSec}s)`;
         }

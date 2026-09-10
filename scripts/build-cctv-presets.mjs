@@ -1,4 +1,12 @@
-export interface CCTVPoint {
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const presetsPath = path.resolve(__dirname, '../src/data/cctv-presets.ts');
+
+const code = `export interface CCTVPoint {
   id: string;
   name: string;
   city: string;
@@ -978,3 +986,7 @@ export const DEFAULT_MATRIX_CHANNELS: CCTVPoint[] = [
   CCTV_PRESETS[19], // 台北信義區基隆路/永吉路 HLS
   CCTV_PRESETS[34], // 東京澀谷站前十字路口 4K
 ];
+`;
+
+fs.writeFileSync(presetsPath, code, 'utf-8');
+console.log('Successfully wrote', presetsPath);

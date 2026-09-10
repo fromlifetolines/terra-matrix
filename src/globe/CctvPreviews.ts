@@ -285,9 +285,9 @@ export class CctvPreviewsManager {
           fbEl.style.display = 'none';
         };
 
-        // If snapshot, auto-refresh every 15s (staggered)
+        // If snapshot, auto-refresh every 2.5~3.5s (staggered for real-time motion)
         if (isSnapshot) {
-          const intervalMs = 15000 + Math.random() * 4000;
+          const intervalMs = 2500 + Math.random() * 1000;
           const timer = window.setInterval(() => {
             imgEl.src = freshen(mediaSrc);
           }, intervalMs);

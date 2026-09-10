@@ -799,6 +799,19 @@ class TerraMatrixApp {
             this.globeScene.onSelectFlight?.(flight);
             return;
           }
+          if (res.category === 'CCTV') {
+            this.globeScene.focusCoordinates(res.lat, res.lng, 15.5, 45, 0);
+            if (res.cctvData && this.cctvExpandedModal) {
+              this.cctvExpandedModal.open(res.cctvData);
+            }
+            this.showInfoCard({
+              badge: `CCTV // 60FPS LIVE SURVEILLANCE`,
+              badgeClass: 'MONITOR',
+              title: res.title,
+              content: `${res.subtitle}<br/>Geodetic Lat/Lng: ${res.lat.toFixed(4)}°, ${res.lng.toFixed(4)}°`,
+            });
+            return;
+          }
           this.globeScene.focusCoordinates(res.lat, res.lng, res.zoom, res.pitch, res.bearing);
           this.showInfoCard({
             badge: `${res.category} // TARGET LOCATED`,

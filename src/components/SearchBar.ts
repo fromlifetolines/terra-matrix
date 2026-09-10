@@ -10,10 +10,12 @@
  * - Strategic straits, military facilities, space stations & coordinates
  */
 
+import { CCTV_PRESETS } from '../data/cctv-presets';
+
 export interface SearchResult {
   title: string;
   subtitle: string;
-  category: 'FLIGHT' | 'CITY' | 'DISTRICT' | 'GEOCODE' | 'CHOKEPOINT' | 'CAPITAL' | 'AIRPORT' | 'SPACE' | 'COORDS';
+  category: 'FLIGHT' | 'CITY' | 'DISTRICT' | 'CCTV' | 'GEOCODE' | 'CHOKEPOINT' | 'CAPITAL' | 'AIRPORT' | 'SPACE' | 'COORDS';
   lat: number;
   lng: number;
   zoom: number;
@@ -21,6 +23,7 @@ export interface SearchResult {
   bearing?: number;
   keywords?: string[];
   flightData?: any;
+  cctvData?: any;
 }
 
 // ── Taiwan Comprehensive Geographic Location Database ──
@@ -881,9 +884,11 @@ export class SearchBar {
       }
     }
 
-    // 3. Specificity bonus: District is far more specific than generic Municipality
+    // 3. Specificity bonus: District and CCTV nodes are far more specific than generic Municipality
     if (item.category === 'DISTRICT') {
       score += 3500;
+    } else if (item.category === 'CCTV') {
+      score += 4500;
     }
 
     // 4. Subtitle match
@@ -960,6 +965,38 @@ export class SearchBar {
       } catch (e) {
         console.warn('[SearchBar] Flight match error:', e);
       }
+    }
+
+    // 2.5 Real-Time CCTV Live Surveillance Nodes (e.g. "林口", "台北", "東京", "加州", "CCTV", "101", "交流道")
+    const cctvMatches = CCTV_PRESETS.filter((cam) => {
+      const n = cam.name.toLowerCase();
+      const c = cam.city.toLowerCase();
+      const co = cam.country.toLowerCase();
+      const cat = cam.category.toLowerCase();
+      const id = cam.id.toLowerCase();
+      return (
+        n.includes(qLower) ||
+        c.includes(qLower) ||
+        co.includes(qLower) ||
+        id.includes(qLower) ||
+        (qLower === 'cctv' || qLower === 'cam' || qLower === '即時影像' || qLower === '監視器' || qLower === '攝影機')
+      );
+    }).slice(0, 6);
+
+    for (const cam of cctvMatches) {
+      const isHls = cam.stream_type === 'hls' || Boolean(cam.stream_url && cam.stream_url.includes('.m3u8'));
+      const isLive = isHls || Boolean(cam.videoId);
+      results.push({
+        title: `📹 ${cam.name}`,
+        subtitle: `${cam.city}, ${cam.country} // ${isLive ? '🔴 60FPS LIVE STREAM' : '⏱️ 2.5S REAL-TIME SNAPSHOT'} · ${cam.source || 'CCTV'}`,
+        category: 'CCTV',
+        lat: cam.lat,
+        lng: cam.lon,
+        zoom: 15.5,
+        pitch: 45,
+        keywords: [cam.name, cam.city, cam.country, 'cctv', 'cam', '即時影像'],
+        cctvData: cam,
+      });
     }
 
     // 3. Taiwan Cities, Counties, and 29 Districts with Specificity Scoring

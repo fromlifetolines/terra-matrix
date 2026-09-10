@@ -1965,6 +1965,7 @@ html, body {
 .badge-airport { background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); }
 .badge-space { background: rgba(245, 158, 11, 0.2); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); }
 .badge-coords { background: rgba(168, 85, 247, 0.2); color: #a855f7; border: 1px solid rgba(168, 85, 247, 0.4); }
+.badge-cctv { background: rgba(239, 68, 68, 0.25); color: #f87171; border: 1px solid #ef4444; }
 
 .search-res-text {
   flex: 1;

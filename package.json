@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "sync-flights": "node scripts/fetch-realtime-flights.mjs",
+    "merge-cctv": "node scripts/merge-cctv-presets.mjs",
+    "build": "node scripts/fetch-realtime-flights.mjs && node scripts/merge-cctv-presets.mjs && tsc && vite build",
     "preview": "vite preview"
   },
   "dependencies": {

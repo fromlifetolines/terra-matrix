@@ -200,7 +200,7 @@ export class GlobeScene {
     const baseUrl = import.meta.env.BASE_URL || '/';
     this.map.addSource('cctv', {
       type: 'geojson',
-      data: `${baseUrl}data/cctv.geojson`,
+      data: `${baseUrl}data/cctv.geojson?_t=${Date.now()}`,
     });
 
     // Outer glow
@@ -1100,7 +1100,7 @@ export class GlobeScene {
 
       // 3. Fallback to bundled local flights.json
       if (!data || (!data.commercial_flights && !data.flights)) {
-        const localRes = await fetch(`${baseUrl}data/flights.json`);
+        const localRes = await fetch(`${baseUrl}data/flights.json?_t=${Date.now()}`);
         data = await localRes.json();
       }
 
