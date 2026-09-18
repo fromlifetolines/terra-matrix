@@ -20,18 +20,19 @@ const tsContent = fs.readFileSync(presetsTsPath, 'utf-8');
 
 // Regex extraction of CCTVPoint items from CCTV_PRESETS in cctv-presets.ts
 const points = [];
-const objRegex = /{\s*id:\s*'([^']+)',\s*name:\s*'([^']+)',\s*city:\s*'([^']+)',\s*country:\s*'([^']+)',\s*lat:\s*([-\d.]+),\s*lon:\s*([-\d.]+),([\s\S]*?)}/g;
+const objRegex = /{\s*id:\s*['"]([^'"]+)['"],\s*name:\s*['"]([^'"]+)['"],\s*city:\s*['"]([^'"]+)['"],\s*country:\s*['"]([^'"]+)['"],\s*lat:\s*([-\d.]+),\s*lon:\s*([-\d.]+),([\s\S]*?)}/g;
 let match;
 while ((match = objRegex.exec(tsContent)) !== null) {
   const [, id, name, city, country, latStr, lonStr, rest] = match;
   const lat = parseFloat(latStr);
   const lon = parseFloat(lonStr);
   
-  const videoIdMatch = rest.match(/videoId:\s*'([^']+)'/);
-  const streamUrlMatch = rest.match(/stream_url:\s*'([^']+)'/);
-  const streamTypeMatch = rest.match(/stream_type:\s*'([^']+)'/);
-  const sourceMatch = rest.match(/source:\s*'([^']+)'/);
-  const categoryMatch = rest.match(/category:\s*'([^']+)'/);
+  const videoIdMatch = rest.match(/videoId:\s*['"]([^'"]+)['"]/);
+  const streamUrlMatch = rest.match(/stream_url:\s*['"]([^'"]+)['"]/);
+  const streamTypeMatch = rest.match(/stream_type:\s*['"]([^'"]+)['"]/);
+  const feedUrlMatch = rest.match(/feed_url:\s*['"]([^'"]+)['"]/);
+  const sourceMatch = rest.match(/source:\s*['"]([^'"]+)['"]/);
+  const categoryMatch = rest.match(/category:\s*['"]([^'"]+)['"]/);
 
   points.push({
     id,
@@ -42,7 +43,8 @@ while ((match = objRegex.exec(tsContent)) !== null) {
     lon,
     videoId: videoIdMatch ? videoIdMatch[1] : undefined,
     stream_url: streamUrlMatch ? streamUrlMatch[1] : undefined,
-    stream_type: streamTypeMatch ? streamTypeMatch[1] : (videoIdMatch ? 'iframe' : 'jpg'),
+    feed_url: feedUrlMatch ? feedUrlMatch[1] : undefined,
+    stream_type: streamTypeMatch ? streamTypeMatch[1] : (videoIdMatch ? 'iframe' : (streamUrlMatch ? 'hls' : 'jpg')),
     source: sourceMatch ? sourceMatch[1] : 'Terra Matrix Live Surveillance',
     category: categoryMatch ? categoryMatch[1] : 'traffic',
   });
