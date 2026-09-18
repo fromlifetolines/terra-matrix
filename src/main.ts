@@ -17,11 +17,13 @@ import { DirectionsPanel } from './components/DirectionsPanel';
 import { OsintPanel } from './components/OsintPanel';
 import { EarthquakeAlertModal } from './components/EarthquakeAlertModal';
 import { EarthquakeWatchPanel } from './components/EarthquakeWatchPanel';
+import { CesiumCityViewer } from './globe/CesiumCityViewer';
 import type { EarthquakeItem } from './globe/layers/EarthquakeLayer';
 import type { GeoIncident } from './data/incidents-news';
 
 class TerraMatrixApp {
   private globeScene!: GlobeScene;
+  private cesiumCityViewer!: CesiumCityViewer;
   private streamMatrix!: StreamMatrix;
   private spaceCamPanel!: SpaceCamPanel;
   private spaceTrackingPanel!: SpaceTrackingPanel;
@@ -138,6 +140,7 @@ class TerraMatrixApp {
       <main class="terra-workspace">
         <section class="globe-wrapper" id="globe-wrapper">
           <div id="globe-container"></div>
+          <div id="cesium-container"></div>
 
           <!-- Left Vertical Category Rail (Osiris Domain Navigation) -->
           <div class="left-category-rail">
@@ -188,6 +191,9 @@ class TerraMatrixApp {
             </button>
             <button class="tactical-rail-btn" id="rail-btn-sat" title="NASA/ArcGIS Satellite Earth">
               <span>🛰️</span> SAT
+            </button>
+            <button class="tactical-rail-btn" id="rail-btn-3d-city" title="Cesium Ion 高擬真 3D 城市模型 (Google 3D Tiles)">
+              <span>🏢</span> 3D CITY
             </button>
             <div class="tactical-rail-divider"></div>
             <button class="tactical-rail-btn" id="rail-btn-recon" title="Osiris 20-in-1 Recon & Cyber Threat Suite">
@@ -292,6 +298,31 @@ class TerraMatrixApp {
     map.on('zoom', () => {
       if (zoomEl) {
         zoomEl.textContent = map.getZoom().toFixed(1);
+      }
+    });
+
+    // Initialize Cesium Ion 3D Photorealistic City Viewer
+    const cesiumContainer = document.getElementById('cesium-container');
+    if (cesiumContainer) {
+      this.cesiumCityViewer = new CesiumCityViewer(cesiumContainer);
+      this.cesiumCityViewer.onExit = (cameraState) => {
+        this.globeScene.focusCoordinates(cameraState.lat, cameraState.lng, cameraState.zoom, cameraState.pitch, cameraState.bearing);
+        document.getElementById('rail-btn-3d-city')?.classList.remove('active');
+      };
+      this.cesiumCityViewer.onSelectCctv = (cam) => {
+        this.cctvExpandedModal.open(cam);
+      };
+    }
+
+    // Auto-transition to Cesium Ion 3D City Model when zooming into city scale (>= 14.5)
+    map.on('zoomend', () => {
+      const z = map.getZoom();
+      if (z >= 14.5 && this.cesiumCityViewer && !this.cesiumCityViewer.getIsActive()) {
+        const center = map.getCenter();
+        const pitch = map.getPitch();
+        const bearing = map.getBearing();
+        this.cesiumCityViewer.enterCityMode(center.lng, center.lat, z, pitch, bearing);
+        document.getElementById('rail-btn-3d-city')?.classList.add('active');
       }
     });
 
@@ -563,6 +594,22 @@ class TerraMatrixApp {
       this.globeScene.setBaseStyle('sat');
       btnSat.classList.add('active');
       btnMap?.classList.remove('active');
+    });
+
+    const btn3dCity = document.getElementById('rail-btn-3d-city');
+    btn3dCity?.addEventListener('click', () => {
+      if (this.cesiumCityViewer && this.cesiumCityViewer.getIsActive()) {
+        this.cesiumCityViewer.exitCityMode();
+        btn3dCity.classList.remove('active');
+      } else if (this.cesiumCityViewer) {
+        const map = this.globeScene.getMap();
+        const center = map.getCenter();
+        const zoom = Math.max(14.5, map.getZoom());
+        const pitch = map.getPitch();
+        const bearing = map.getBearing();
+        this.cesiumCityViewer.enterCityMode(center.lng, center.lat, zoom, pitch, bearing);
+        btn3dCity.classList.add('active');
+      }
     });
 
     btnRecon?.addEventListener('click', () => {

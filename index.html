@@ -27,7 +27,20 @@
         flex-direction: column;
         overflow: hidden;
       }
+      #cesium-container {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 5;
+        display: none;
+      }
     </style>
+    <script>
+      window.CESIUM_BASE_URL = 'https://cesium.com/downloads/cesiumjs/releases/1.120/Build/Cesium/';
+    </script>
+    <link rel="stylesheet" href="https://cesium.com/downloads/cesiumjs/releases/1.120/Build/Cesium/Widgets/widgets.css" />
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.120/Build/Cesium/Cesium.js"></script>
   </head>
   <body style="margin: 0; padding: 0; background: #050507; width: 100vw; height: 100vh; overflow: hidden;">
     <div id="app" style="width: 100vw; height: 100vh; background: #050507; display: flex; flex-direction: column;"></div>
