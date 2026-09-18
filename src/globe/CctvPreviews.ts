@@ -162,17 +162,25 @@ export class CctvPreviewsManager {
         </div>
       `;
 
-      // Preview Frame: detect HLS stream vs snapshot vs YouTube
+      // Preview Frame: detect HLS stream vs snapshot vs YouTube Live
       const isHls = Boolean(
         cam.stream_type === 'hls' ||
         (cam.stream_url && (cam.stream_url.includes('.m3u8') || cam.stream_url.includes('/hls/')))
       );
 
-      const mediaSrc = resolveMediaUrl(cam);
-      const isSnapshot = !isHls && mediaSrc && !mediaSrc.includes('img.youtube.com') && !mediaSrc.includes('.m3u8');
+      let ytVideoId = cam.videoId;
+      if (!ytVideoId && cam.stream_url) {
+        const m = String(cam.stream_url).match(/(?:embed\/|v=|vi\/|youtu\.be\/|\/v\/)([a-zA-Z0-9_-]{11})/);
+        if (m) ytVideoId = m[1];
+      }
+      const isYouTube = Boolean(ytVideoId);
 
-      const mediaHtml = isHls
-        ? `
+      const mediaSrc = resolveMediaUrl(cam);
+      const isSnapshot = !isHls && !isYouTube && Boolean(mediaSrc && !mediaSrc.includes('.m3u8'));
+
+      let mediaHtml = '';
+      if (isHls) {
+        mediaHtml = `
           <div class="cctv-tile-media" style="height: ${GEOM.imageHeight}px;">
             <video
               class="cctv-tile-video"
@@ -182,20 +190,42 @@ export class CctvPreviewsManager {
               playsinline
               loop
             ></video>
+            <span class="cctv-tile-live-badge"><span class="cctv-label-dot" style="background:#10b981;box-shadow:0 0 6px #10b981;"></span> 60FPS LIVE</span>
             <div class="cctv-tile-fallback" id="cctv-fb-${cam.id}" style="display:none;">
               <div class="cctv-scanline-sweep"></div>
               <div class="cctv-fallback-radar"></div>
               <span class="cctv-fallback-text">FEED ACTIVE</span>
             </div>
           </div>
-        `
-        : `
+        `;
+      } else if (isYouTube && ytVideoId) {
+        mediaHtml = `
+          <div class="cctv-tile-media" style="height: ${GEOM.imageHeight}px; position: relative; overflow: hidden; background: #000;">
+            <iframe
+              src="https://www.youtube-nocookie.com/embed/${ytVideoId}?autoplay=1&mute=1&controls=0&modestbranding=1&playsinline=1&rel=0&showinfo=0&loop=1&enablejsapi=1"
+              title="${cam.name}"
+              frameborder="0"
+              class="cctv-tile-live-iframe"
+              loading="lazy"
+              allow="autoplay; encrypted-media"
+            ></iframe>
+            <span class="cctv-tile-live-badge"><span class="cctv-label-dot" style="background:#ef4444;box-shadow:0 0 6px #ef4444;"></span> LIVE STREAM</span>
+            <div class="cctv-tile-fallback" id="cctv-fb-${cam.id}" style="display:none;">
+              <div class="cctv-scanline-sweep"></div>
+              <div class="cctv-fallback-radar"></div>
+              <span class="cctv-fallback-text">FEED ACTIVE</span>
+            </div>
+          </div>
+        `;
+      } else {
+        mediaHtml = `
           <div class="cctv-tile-media" style="height: ${GEOM.imageHeight}px;">
             ${
               mediaSrc && !mediaSrc.includes('.m3u8')
                 ? `<img src="${mediaSrc}" alt="${cam.name}" referrerpolicy="no-referrer" class="cctv-tile-img" id="cctv-img-${cam.id}" />`
                 : ''
             }
+            <span class="cctv-tile-live-badge" style="background:rgba(14,165,233,0.85);"><span class="cctv-label-dot" style="background:#38bdf8;box-shadow:0 0 6px #38bdf8;"></span> 2.5S REALTIME</span>
             <div class="cctv-tile-fallback" id="cctv-fb-${cam.id}" style="${mediaSrc && !mediaSrc.includes('.m3u8') ? 'display:none;' : 'display:flex;'}">
               <div class="cctv-scanline-sweep"></div>
               <div class="cctv-fallback-radar"></div>
@@ -203,6 +233,7 @@ export class CctvPreviewsManager {
             </div>
           </div>
         `;
+      }
 
       // Label strip
       const labelHtml = `
@@ -350,6 +381,11 @@ export class CctvPreviewsManager {
         v.pause();
         v.removeAttribute('src');
         v.load();
+      });
+
+      const iframes = this.container.querySelectorAll<HTMLIFrameElement>('iframe');
+      iframes.forEach((f) => {
+        f.src = 'about:blank';
       });
     }
   }

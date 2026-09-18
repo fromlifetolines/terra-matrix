@@ -45,6 +45,7 @@ class TerraMatrixApp {
   private osintPanel!: OsintPanel;
 
   private autoRotate = false;
+  private isGlobeFullscreen = false;
 
   constructor() {
     try {
@@ -127,6 +128,10 @@ class TerraMatrixApp {
           <button id="btn-reset-view" class="header-btn" title="Reset Camera Perspective">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="12 8 8 12 12 16 12 8"/></svg>
             RESET
+          </button>
+          <button id="btn-toggle-fullscreen" class="header-btn" title="Toggle Fullscreen Tactical 3D View (Hide Stream Matrix)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+            <span id="btn-fullscreen-text">FULLSCREEN</span>
           </button>
           <div class="tpe-clock">
             <span id="zulu-clock" class="clock-zulu">ZULU 00:00:00 UTC</span>
@@ -257,6 +262,7 @@ class TerraMatrixApp {
             <span>CURSOR: <b id="bar-coords" class="telemetry-val">25.0400, 121.5000</b></span>
             <span>LOCATION: <b id="bar-location" class="telemetry-val">Taipei HQ / Global Intelligence Sphere</b></span>
             <span>ZOOM: <b id="bar-zoom" class="telemetry-val">2.3</b></span>
+            <button id="btn-expand-globe" class="telemetry-expand-btn" title="Toggle Fullscreen 3D Globe / City View">⛶ FULLSCREEN</button>
           </div>
           <div class="marquee-container">
             <div class="marquee-content" id="marquee-ticker">
@@ -565,12 +571,20 @@ class TerraMatrixApp {
     const btnTarget = document.getElementById('rail-btn-target');
 
     btn3d?.addEventListener('click', () => {
+      if (this.cesiumCityViewer && this.cesiumCityViewer.getIsActive()) {
+        this.cesiumCityViewer.exitCityMode();
+        btn3dCity?.classList.remove('active');
+      }
       this.globeScene.setProjection('globe');
       btn3d.classList.add('active');
       btn2d?.classList.remove('active');
     });
 
     btn2d?.addEventListener('click', () => {
+      if (this.cesiumCityViewer && this.cesiumCityViewer.getIsActive()) {
+        this.cesiumCityViewer.exitCityMode();
+        btn3dCity?.classList.remove('active');
+      }
       this.globeScene.setProjection('mercator');
       btn2d.classList.add('active');
       btn3d?.classList.remove('active');
@@ -1102,6 +1116,69 @@ class TerraMatrixApp {
         this.aiSitrepModal.toggle();
       });
     }
+
+    const fullscreenBtn = document.getElementById('btn-toggle-fullscreen');
+    if (fullscreenBtn) {
+      fullscreenBtn.addEventListener('click', () => {
+        this.toggleGlobeFullscreen();
+      });
+    }
+
+    const expandGlobeBtn = document.getElementById('btn-expand-globe');
+    if (expandGlobeBtn) {
+      expandGlobeBtn.addEventListener('click', () => {
+        this.toggleGlobeFullscreen();
+      });
+    }
+
+    // Keyboard Shortcuts: 'F' toggles Fullscreen, 'ESC' exits Fullscreen
+    window.addEventListener('keydown', (e) => {
+      const activeTag = (document.activeElement?.tagName || '').toLowerCase();
+      if (activeTag === 'input' || activeTag === 'textarea') return;
+
+      if (e.key === 'f' || e.key === 'F') {
+        if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+          e.preventDefault();
+          this.toggleGlobeFullscreen();
+        }
+      } else if (e.key === 'Escape' && this.isGlobeFullscreen) {
+        this.toggleGlobeFullscreen(false);
+      }
+    });
+  }
+
+  public toggleGlobeFullscreen(force?: boolean): void {
+    const workspace = document.querySelector('.terra-workspace');
+    if (!workspace) return;
+
+    this.isGlobeFullscreen = force !== undefined ? force : !this.isGlobeFullscreen;
+    workspace.classList.toggle('globe-fullscreen', this.isGlobeFullscreen);
+
+    const btn = document.getElementById('btn-toggle-fullscreen');
+    const label = document.getElementById('btn-fullscreen-text');
+    const expandBtn = document.getElementById('btn-expand-globe');
+
+    if (this.isGlobeFullscreen) {
+      btn?.classList.add('active');
+      if (btn) btn.style.color = 'var(--accent-cyan)';
+      if (label) label.textContent = 'SPLIT VIEW';
+      if (expandBtn) expandBtn.textContent = '🗗 SPLIT VIEW';
+    } else {
+      btn?.classList.remove('active');
+      if (btn) btn.style.color = '';
+      if (label) label.textContent = 'FULLSCREEN';
+      if (expandBtn) expandBtn.textContent = '⛶ FULLSCREEN';
+    }
+
+    // Trigger canvas resize for MapLibre, Three.js, and Cesium
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new Event('resize'));
+      if (this.globeScene) {
+        try {
+          this.globeScene.getMap()?.resize();
+        } catch {}
+      }
+    });
   }
 }
 

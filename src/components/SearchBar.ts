@@ -820,6 +820,158 @@ export const TAIWAN_LOCATIONS: SearchResult[] = [
 ];
 
 export const STRATEGIC_TARGETS: SearchResult[] = [
+  // Global Major Metropolises & Countries (全球核心大城與戰略樞紐)
+  {
+    title: '舊金山 (San Francisco)',
+    subtitle: 'United States / Northern California Silicon Valley Hub · 矽谷與海灣核心',
+    category: 'CITY',
+    lat: 37.7749,
+    lng: -122.4194,
+    zoom: 13.5,
+    pitch: 45,
+    keywords: ['舊金山', 'san francisco', '三藩市', 'sf', '舊金山灣區', '金門大橋', '海灣大橋'],
+  },
+  {
+    title: '洛杉磯 (Los Angeles)',
+    subtitle: 'United States / Southern California Pacific Metropolis · 大洛杉磯都會區',
+    category: 'CITY',
+    lat: 34.0522,
+    lng: -118.2437,
+    zoom: 13,
+    pitch: 40,
+    keywords: ['洛杉磯', 'los angeles', 'la', 'lax', '好萊塢', 'hollywood', '威尼斯海灘'],
+  },
+  {
+    title: '拉斯維加斯 (Las Vegas)',
+    subtitle: 'United States / Nevada Global Entertainment & Sphere Hub · 賭城大道核心',
+    category: 'CITY',
+    lat: 36.1699,
+    lng: -115.1398,
+    zoom: 13.5,
+    pitch: 45,
+    keywords: ['拉斯維加斯', 'las vegas', 'vegas', '賭城', 'sphere', '百樂宮'],
+  },
+  {
+    title: '挪威 (Norway / Oslo)',
+    subtitle: 'Northern Europe / Scandinavia Arctic Gateway · 奧斯陸/特羅姆瑟/卑爾根',
+    category: 'CAPITAL',
+    lat: 59.9139,
+    lng: 10.7522,
+    zoom: 11,
+    pitch: 35,
+    keywords: ['挪威', 'norway', '奧斯陸', 'oslo', '特羅姆瑟', 'tromso', '卑爾根', 'bergen', '羅弗敦群島'],
+  },
+  {
+    title: '芬蘭 (Finland / Helsinki)',
+    subtitle: 'Northern Europe / Baltic Technological Nexus · 赫爾辛基/羅瓦涅米聖誕老人村',
+    category: 'CAPITAL',
+    lat: 60.1699,
+    lng: 24.9384,
+    zoom: 11,
+    pitch: 35,
+    keywords: ['芬蘭', 'finland', '赫爾辛基', 'helsinki', '羅瓦涅米', 'rovaniemi', '極光'],
+  },
+  {
+    title: '瑞典 (Sweden / Stockholm)',
+    subtitle: 'Northern Europe / Scandinavian Capital & Archipelago · 斯德哥爾摩/哥德堡',
+    category: 'CAPITAL',
+    lat: 59.3293,
+    lng: 18.0686,
+    zoom: 11,
+    pitch: 35,
+    keywords: ['瑞典', 'sweden', '斯德哥爾摩', 'stockholm', '哥德堡', 'gothenburg'],
+  },
+  {
+    title: '冰島 (Iceland / Reykjavik)',
+    subtitle: 'North Atlantic / Geothermal Volcanic Island · 雷克雅維克/火山活躍帶',
+    category: 'CAPITAL',
+    lat: 64.1466,
+    lng: -21.9426,
+    zoom: 11,
+    pitch: 40,
+    keywords: ['冰島', 'iceland', '雷克雅維克', 'reykjavik', '冰島火山', '法格拉達爾火山'],
+  },
+  {
+    title: '紐約 (New York City)',
+    subtitle: 'United States / Global Financial Capital · 曼哈頓/時代廣場/華爾街',
+    category: 'CITY',
+    lat: 40.7128,
+    lng: -74.0060,
+    zoom: 13,
+    pitch: 45,
+    keywords: ['紐約', 'new york', 'new york city', 'nyc', '曼哈頓', '時代廣場', '時代廣場4k'],
+  },
+  {
+    title: '巴黎 (Paris)',
+    subtitle: 'France / European Cultural & Diplomatic Capital · 塞納河/艾菲爾鐵塔',
+    category: 'CAPITAL',
+    lat: 48.8566,
+    lng: 2.3522,
+    zoom: 12,
+    pitch: 35,
+    keywords: ['巴黎', 'paris', 'france', '法國', '艾菲爾鐵塔'],
+  },
+  {
+    title: '柏林 (Berlin)',
+    subtitle: 'Germany / Central European Strategic Command · 布蘭登堡門',
+    category: 'CAPITAL',
+    lat: 52.5200,
+    lng: 13.4050,
+    zoom: 12,
+    pitch: 35,
+    keywords: ['柏林', 'berlin', 'germany', '德國'],
+  },
+  {
+    title: '羅馬 (Rome)',
+    subtitle: 'Italy / Mediterranean Historic Capital · 羅馬競技場/梵蒂岡',
+    category: 'CAPITAL',
+    lat: 41.9028,
+    lng: 12.4964,
+    zoom: 12.5,
+    pitch: 40,
+    keywords: ['羅馬', 'rome', 'italy', '義大利'],
+  },
+  {
+    title: '杜拜 (Dubai)',
+    subtitle: 'United Arab Emirates / Middle East Financial & Maritime Hub · 哈里發塔',
+    category: 'CITY',
+    lat: 25.2048,
+    lng: 55.2708,
+    zoom: 12.5,
+    pitch: 45,
+    keywords: ['杜拜', 'dubai', 'uae', '阿聯酋', '哈里發塔'],
+  },
+  {
+    title: '雪梨 (Sydney)',
+    subtitle: 'Australia / South Pacific Gateway · 雪梨歌劇院與港灣大橋',
+    category: 'CITY',
+    lat: -33.8688,
+    lng: 151.2093,
+    zoom: 12.5,
+    pitch: 40,
+    keywords: ['雪梨', '悉尼', 'sydney', 'australia', '澳洲', '雪梨歌劇院'],
+  },
+  {
+    title: '多倫多 (Toronto)',
+    subtitle: 'Canada / Ontario Financial Metropolis · 安大略湖畔/CN塔',
+    category: 'CITY',
+    lat: 43.6532,
+    lng: -79.3832,
+    zoom: 12.5,
+    pitch: 40,
+    keywords: ['多倫多', 'toronto', 'canada', '加拿大'],
+  },
+  {
+    title: '香港 (Hong Kong)',
+    subtitle: 'Asia / Victoria Harbour Financial Nexus · 中環與維多利亞港',
+    category: 'CITY',
+    lat: 22.3193,
+    lng: 114.1694,
+    zoom: 12.5,
+    pitch: 45,
+    keywords: ['香港', 'hong kong', 'hk', '維多利亞港'],
+  },
+
   // Strategic Capitals & Theaters
   { title: 'Tokyo', subtitle: 'Japan / East Asia Strategic Command', category: 'CAPITAL', lat: 35.676, lng: 139.65, zoom: 10, pitch: 35, keywords: ['tokyo', '東京', 'japan'] },
   { title: 'Washington D.C.', subtitle: 'United States / Pentagon & White House', category: 'CAPITAL', lat: 38.907, lng: -77.036, zoom: 11, pitch: 35, keywords: ['washington', 'pentagon', 'white house', '華盛頓'] },
@@ -986,8 +1138,8 @@ export class SearchBar {
 
   /**
    * Specificity Scoring Algorithm:
-   * Accurately ranks locations by matching granularity so specific districts
-   * (e.g. "新北市林口區") ALWAYS rank above generic municipalities ("新北市")!
+   * Accurately ranks locations by matching granularity so specific targets
+   * always rank by exact relevance and specificity.
    */
   private scoreMatch(query: string, item: SearchResult): number {
     const q = query.trim().toLowerCase();
@@ -1000,32 +1152,46 @@ export class SearchBar {
 
     // 1. Exact match on title or keywords
     if (title === q || keywords.includes(q)) {
-      score += 15000;
+      score += 20000;
     }
 
-    // 2. Keyword exact containment
+    // 2. Keyword matching
     for (const kw of keywords) {
       if (kw === q) {
-        score += 12000;
-      } else if (q.startsWith(kw) || kw.startsWith(q)) {
-        score += 6000 + kw.length * 200;
-      } else if (q.includes(kw)) {
-        score += 4000 + kw.length * 150;
+        score += 15000;
+      } else if (kw.startsWith(q)) {
+        // e.g. query "舊金" matches keyword "舊金山"
+        score += 8000 + q.length * 300;
       } else if (kw.includes(q)) {
-        score += 3000 + q.length * 100;
+        // e.g. query "林口" matches keyword "新北市林口區"
+        score += 5000 + q.length * 200;
+      } else if (q.startsWith(kw) && kw.length >= 3) {
+        // Only allow query startsWith keyword if keyword is sufficiently long (>= 3 chars)
+        score += 3000 + kw.length * 100;
       }
     }
 
-    // 3. Specificity bonus: District and CCTV nodes are far more specific than generic Municipality
-    if (item.category === 'DISTRICT') {
-      score += 3500;
-    } else if (item.category === 'CCTV') {
-      score += 4500;
+    // 3. Title contains query
+    if (title.includes(q)) {
+      score += 4000 + q.length * 100;
     }
 
-    // 4. Subtitle match
+    // 4. Specificity bonus ONLY if query actually matched (score > 0)!
+    if (score > 0) {
+      if (item.category === 'CCTV') {
+        score += 3000;
+      } else if (item.category === 'DISTRICT') {
+        score += 2000;
+      } else if (item.category === 'CAPITAL') {
+        score += 1500;
+      } else if (item.category === 'CITY') {
+        score += 1000;
+      }
+    }
+
+    // 5. Subtitle match
     if (sub.includes(q)) {
-      score += 500;
+      score += score > 0 ? 500 : 300;
     }
 
     return score;
@@ -1099,31 +1265,27 @@ export class SearchBar {
       }
     }
 
-    // 2. Taiwan Cities, Strategic Hubs, and Key Landmarks with Specificity Scoring
-    const scoredTaiwan = TAIWAN_LOCATIONS.map((loc) => ({
-      item: loc,
-      score: this.scoreMatch(query, loc),
-    }))
+    // 3. Taiwan Cities, Strategic World Targets, and Key Landmarks Scored Unified Pool
+    const localCandidates = [...STRATEGIC_TARGETS, ...TAIWAN_LOCATIONS];
+    const scoredLocal = localCandidates
+      .map((item) => ({ item, score: this.scoreMatch(query, item) }))
       .filter((entry) => entry.score > 0)
       .sort((a, b) => b.score - a.score)
       .map((entry) => entry.item);
 
-    results.push(...scoredTaiwan);
-
-    // 3. Strategic Targets & World Capitals
-    const scoredTargets = STRATEGIC_TARGETS.map((target) => ({
-      item: target,
-      score: this.scoreMatch(query, target),
-    }))
-      .filter((entry) => entry.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .map((entry) => entry.item);
-
-    results.push(...scoredTargets);
+    const seenCoords = new Set<string>();
+    for (const item of scoredLocal) {
+      const key = `${item.lat.toFixed(3)},${item.lng.toFixed(3)}`;
+      if (!seenCoords.has(key)) {
+        seenCoords.add(key);
+        results.push(item);
+      }
+    }
 
     // 4. OpenStreetMap Nominatim Live Geocoding Fallback
-    // If exact local results are fewer than 3 or user searched for specific street/building, query OSM Nominatim
-    if (scoredTaiwan.length < 3 && query.length >= 2) {
+    // If exact local results are fewer than 3 or top score is low, query OSM Nominatim
+    const topScore = scoredLocal.length > 0 ? this.scoreMatch(query, scoredLocal[0]) : 0;
+    if ((results.length < 4 || topScore < 8000) && query.length >= 2) {
       try {
         const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`;
         const res = await fetch(nominatimUrl, {
@@ -1144,8 +1306,10 @@ export class SearchBar {
                 else if (['county', 'state'].includes(item.type)) zoom = 10;
                 else if (['country'].includes(item.type)) zoom = 5.5;
 
-                const isDup = results.some((r) => Math.abs(r.lat - lat) < 0.005 && Math.abs(r.lng - lng) < 0.005);
+                const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
+                const isDup = seenCoords.has(key) || results.some((r) => Math.abs(r.lat - lat) < 0.005 && Math.abs(r.lng - lng) < 0.005);
                 if (!isDup) {
+                  seenCoords.add(key);
                   const parts = (item.display_name || '').split(',').map((s: string) => s.trim());
                   const primary = parts.slice(0, 2).join(', ');
                   const secondary = parts.slice(2, 5).join(', ');
