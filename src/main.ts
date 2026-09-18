@@ -312,19 +312,11 @@ class TerraMatrixApp {
       this.cesiumCityViewer.onSelectCctv = (cam) => {
         this.cctvExpandedModal.open(cam);
       };
+      this.cesiumCityViewer.onTelemetry = ({ lat, lng, altM }) => {
+        if (coordsEl) coordsEl.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        if (zoomEl) zoomEl.textContent = `3D ALT ${altM}m`;
+      };
     }
-
-    // Auto-transition to Cesium Ion 3D City Model when zooming into city scale (>= 14.5)
-    map.on('zoomend', () => {
-      const z = map.getZoom();
-      if (z >= 14.5 && this.cesiumCityViewer && !this.cesiumCityViewer.getIsActive()) {
-        const center = map.getCenter();
-        const pitch = map.getPitch();
-        const bearing = map.getBearing();
-        this.cesiumCityViewer.enterCityMode(center.lng, center.lat, z, pitch, bearing);
-        document.getElementById('rail-btn-3d-city')?.classList.add('active');
-      }
-    });
 
     // Intercept map click for distance measurement if tool active
     map.on('click', (e) => {
@@ -851,6 +843,9 @@ class TerraMatrixApp {
             if (res.cctvData && this.cctvExpandedModal) {
               this.cctvExpandedModal.open(res.cctvData);
             }
+            if (this.cesiumCityViewer && this.cesiumCityViewer.getIsActive()) {
+              this.cesiumCityViewer.flyToCoordinates(res.lng, res.lat, 16.5, 45, 0);
+            }
             this.showInfoCard({
               badge: `CCTV // 60FPS LIVE SURVEILLANCE`,
               badgeClass: 'MONITOR',
@@ -860,6 +855,9 @@ class TerraMatrixApp {
             return;
           }
           this.globeScene.focusCoordinates(res.lat, res.lng, res.zoom, res.pitch, res.bearing);
+          if (this.cesiumCityViewer && this.cesiumCityViewer.getIsActive()) {
+            this.cesiumCityViewer.flyToCoordinates(res.lng, res.lat, res.zoom, res.pitch || 35, res.bearing || 0);
+          }
           this.showInfoCard({
             badge: `${res.category} // TARGET LOCATED`,
             badgeClass: 'MONITOR',
@@ -1080,6 +1078,9 @@ class TerraMatrixApp {
       rotateBtn.addEventListener('click', () => {
         this.autoRotate = !this.autoRotate;
         this.globeScene.setAutoRotate(this.autoRotate);
+        if (this.cesiumCityViewer && this.cesiumCityViewer.getIsActive()) {
+          this.cesiumCityViewer.setAutoRotate(this.autoRotate);
+        }
         rotateBtn.style.color = this.autoRotate ? 'var(--accent-emerald)' : 'var(--text-dim)';
       });
     }
@@ -1087,6 +1088,10 @@ class TerraMatrixApp {
     const resetBtn = document.getElementById('btn-reset-view');
     if (resetBtn) {
       resetBtn.addEventListener('click', () => {
+        if (this.cesiumCityViewer && this.cesiumCityViewer.getIsActive()) {
+          this.cesiumCityViewer.exitCityMode();
+          document.getElementById('rail-btn-3d-city')?.classList.remove('active');
+        }
         this.globeScene.focusCoordinates(25.04, 121.5, 2.3, 30, 0);
       });
     }

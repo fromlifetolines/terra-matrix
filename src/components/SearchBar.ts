@@ -28,6 +28,138 @@ export interface SearchResult {
 
 // ── Taiwan Comprehensive Geographic Location Database ──
 export const TAIWAN_LOCATIONS: SearchResult[] = [
+  // ── Taiwan Major Strategic Hubs & Transportation Centers ──
+  {
+    title: '台北車站 (Taipei Main Station)',
+    subtitle: 'Taiwan / National Transportation Hub · 高鐵/台鐵/北捷三鐵共構核心',
+    category: 'CHOKEPOINT',
+    lat: 25.0478,
+    lng: 121.5170,
+    zoom: 16.5,
+    pitch: 45,
+    keywords: ['台北車站', '臺北車站', '台北車', 'taipei main station', 'taipei station', '北車', '高鐵台北站', '台鐵台北站'],
+  },
+  {
+    title: '台北101 (Taipei 101)',
+    subtitle: 'Taiwan / Financial Landmark · 信義計畫區天際線核心',
+    category: 'CAPITAL',
+    lat: 25.0339,
+    lng: 121.5644,
+    zoom: 16.5,
+    pitch: 50,
+    keywords: ['台北101', '臺北101', 'taipei 101', '101大樓', '信義區', '信義計畫區'],
+  },
+  {
+    title: '桃園國際機場 (Taoyuan Airport - TPE)',
+    subtitle: 'Taiwan / Major International Gateway · 國門第一航廈/第二航廈',
+    category: 'AIRPORT',
+    lat: 25.0797,
+    lng: 121.2342,
+    zoom: 14.5,
+    pitch: 35,
+    keywords: ['桃園機場', '桃園國際機場', 'tpe', 'taoyuan airport', '航空城'],
+  },
+  {
+    title: '台北松山機場 (Songshan Airport - TSA)',
+    subtitle: 'Taiwan / Domestic & Capital Hub · 敦化北路都會跑道',
+    category: 'AIRPORT',
+    lat: 25.0697,
+    lng: 121.5525,
+    zoom: 15,
+    pitch: 35,
+    keywords: ['松山機場', '台北松山機場', 'tsa', 'songshan airport'],
+  },
+  {
+    title: '板橋車站 (Banqiao Station)',
+    subtitle: 'Taiwan / New Taipei Transportation Hub · 新北三鐵核心',
+    category: 'CHOKEPOINT',
+    lat: 25.0142,
+    lng: 121.4637,
+    zoom: 16.5,
+    pitch: 45,
+    keywords: ['板橋車站', '板橋高鐵', '板橋捷運', 'banqiao station'],
+  },
+  {
+    title: '台中車站 (Taichung Station)',
+    subtitle: 'Taiwan / Central Transport Junction · 舊城中樞',
+    category: 'CHOKEPOINT',
+    lat: 24.1370,
+    lng: 120.6869,
+    zoom: 16,
+    pitch: 40,
+    keywords: ['台中車站', '臺中車站', 'taichung station'],
+  },
+  {
+    title: '高雄車站 (Kaohsiung Station)',
+    subtitle: 'Taiwan / Southern Railway Hub · 綠色站體核心',
+    category: 'CHOKEPOINT',
+    lat: 22.6397,
+    lng: 120.3023,
+    zoom: 16,
+    pitch: 40,
+    keywords: ['高雄車站', 'kaohsiung station'],
+  },
+  {
+    title: '新北市林口區公所 / 三井Outlet (Linkou Hub)',
+    subtitle: 'Taiwan / New Taipei Linkou Central Hub · 文化三路/忠孝路',
+    category: 'DISTRICT',
+    lat: 25.0715,
+    lng: 121.3665,
+    zoom: 15.5,
+    pitch: 40,
+    keywords: ['新北市林口區', '林口區', '林口', '三井outlet', 'linkou'],
+  },
+  {
+    title: '總統府 (Presidential Office Building)',
+    subtitle: 'Taiwan / National Executive Center · 重慶南路博愛特區',
+    category: 'CAPITAL',
+    lat: 25.0401,
+    lng: 121.5119,
+    zoom: 17,
+    pitch: 50,
+    keywords: ['總統府', '博愛特區', 'presidential office'],
+  },
+  {
+    title: '中正紀念堂 / 自由廣場 (Chiang Kai-shek Memorial Hall)',
+    subtitle: 'Taiwan / National Cultural Center · 國家兩廳院',
+    category: 'CAPITAL',
+    lat: 25.0347,
+    lng: 121.5218,
+    zoom: 16.5,
+    pitch: 45,
+    keywords: ['中正紀念堂', '自由廣場', '兩廳院'],
+  },
+  {
+    title: '台北大巨蛋 (Taipei Dome)',
+    subtitle: 'Taiwan / Premier Sports Complex · 忠孝東路多功能園區',
+    category: 'CAPITAL',
+    lat: 25.0426,
+    lng: 121.5601,
+    zoom: 16.5,
+    pitch: 50,
+    keywords: ['台北大巨蛋', '大巨蛋', 'taipei dome'],
+  },
+  {
+    title: '西門町商圈 (Ximending)',
+    subtitle: 'Taiwan / Cultural & Commercial District · 萬華西門徒步區',
+    category: 'DISTRICT',
+    lat: 25.0422,
+    lng: 121.5074,
+    zoom: 16.5,
+    pitch: 45,
+    keywords: ['西門町', '西門', 'ximending'],
+  },
+  {
+    title: '新竹科學園區 (Hsinchu Science Park)',
+    subtitle: 'Taiwan / Global Silicon & Semiconductor Fab Matrix · 科技重鎮',
+    category: 'CHOKEPOINT',
+    lat: 24.7818,
+    lng: 120.9972,
+    zoom: 15,
+    pitch: 35,
+    keywords: ['新竹科學園區', '竹科', 'hsinchu science park'],
+  },
+
   // ── Special Municipalities & Major Cities ──
   {
     title: '新北市 (New Taipei City)',
@@ -967,39 +1099,7 @@ export class SearchBar {
       }
     }
 
-    // 2.5 Real-Time CCTV Live Surveillance Nodes (e.g. "林口", "台北", "東京", "加州", "CCTV", "101", "交流道")
-    const cctvMatches = CCTV_PRESETS.filter((cam) => {
-      const n = cam.name.toLowerCase();
-      const c = cam.city.toLowerCase();
-      const co = cam.country.toLowerCase();
-      const cat = cam.category.toLowerCase();
-      const id = cam.id.toLowerCase();
-      return (
-        n.includes(qLower) ||
-        c.includes(qLower) ||
-        co.includes(qLower) ||
-        id.includes(qLower) ||
-        (qLower === 'cctv' || qLower === 'cam' || qLower === '即時影像' || qLower === '監視器' || qLower === '攝影機')
-      );
-    }).slice(0, 6);
-
-    for (const cam of cctvMatches) {
-      const isHls = cam.stream_type === 'hls' || Boolean(cam.stream_url && cam.stream_url.includes('.m3u8'));
-      const isLive = isHls || Boolean(cam.videoId);
-      results.push({
-        title: `📹 ${cam.name}`,
-        subtitle: `${cam.city}, ${cam.country} // ${isLive ? '🔴 60FPS LIVE STREAM' : '⏱️ 2.5S REAL-TIME SNAPSHOT'} · ${cam.source || 'CCTV'}`,
-        category: 'CCTV',
-        lat: cam.lat,
-        lng: cam.lon,
-        zoom: 15.5,
-        pitch: 45,
-        keywords: [cam.name, cam.city, cam.country, 'cctv', 'cam', '即時影像'],
-        cctvData: cam,
-      });
-    }
-
-    // 3. Taiwan Cities, Counties, and 29 Districts with Specificity Scoring
+    // 2. Taiwan Cities, Strategic Hubs, and Key Landmarks with Specificity Scoring
     const scoredTaiwan = TAIWAN_LOCATIONS.map((loc) => ({
       item: loc,
       score: this.scoreMatch(query, loc),
@@ -1010,7 +1110,7 @@ export class SearchBar {
 
     results.push(...scoredTaiwan);
 
-    // 4. Strategic Targets & World Capitals
+    // 3. Strategic Targets & World Capitals
     const scoredTargets = STRATEGIC_TARGETS.map((target) => ({
       item: target,
       score: this.scoreMatch(query, target),
@@ -1021,9 +1121,9 @@ export class SearchBar {
 
     results.push(...scoredTargets);
 
-    // 5. OpenStreetMap Nominatim Live Geocoding Fallback
-    // If local results are few or user searched for specific street/building, query OSM Nominatim
-    if (results.length < 5 && query.length >= 2) {
+    // 4. OpenStreetMap Nominatim Live Geocoding Fallback
+    // If exact local results are fewer than 3 or user searched for specific street/building, query OSM Nominatim
+    if (scoredTaiwan.length < 3 && query.length >= 2) {
       try {
         const nominatimUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`;
         const res = await fetch(nominatimUrl, {
@@ -1037,7 +1137,7 @@ export class SearchBar {
               const lng = parseFloat(item.lon);
               if (!isNaN(lat) && !isNaN(lng)) {
                 let zoom = 14;
-                if (['house', 'building', 'address', 'shop', 'amenity'].includes(item.type)) zoom = 16.5;
+                if (['house', 'building', 'address', 'shop', 'amenity', 'station', 'railway'].includes(item.type)) zoom = 16.5;
                 else if (['road', 'street', 'highway'].includes(item.type)) zoom = 15;
                 else if (['neighbourhood', 'suburb'].includes(item.type)) zoom = 14;
                 else if (['city', 'town', 'village'].includes(item.type)) zoom = 12.5;
@@ -1066,6 +1166,39 @@ export class SearchBar {
       } catch (e) {
         console.warn('[SearchBar] Nominatim geocode fallback error:', e);
       }
+    }
+
+    // 5. Real-Time CCTV Live Surveillance Nodes (appended as supplementary feeds)
+    const isCctvQuery = qLower.includes('cctv') || qLower.includes('cam') || qLower.includes('即時') || qLower.includes('監視') || qLower.includes('攝影');
+    const cctvMatches = CCTV_PRESETS.filter((cam) => {
+      const n = cam.name.toLowerCase();
+      const c = cam.city.toLowerCase();
+      const co = cam.country.toLowerCase();
+      const cat = cam.category.toLowerCase();
+      const id = cam.id.toLowerCase();
+      return (
+        n.includes(qLower) ||
+        c.includes(qLower) ||
+        co.includes(qLower) ||
+        id.includes(qLower) ||
+        isCctvQuery
+      );
+    }).slice(0, isCctvQuery ? 6 : 3);
+
+    for (const cam of cctvMatches) {
+      const isHls = cam.stream_type === 'hls' || Boolean(cam.stream_url && cam.stream_url.includes('.m3u8'));
+      const isLive = isHls || Boolean(cam.videoId);
+      results.push({
+        title: `📹 ${cam.name}`,
+        subtitle: `${cam.city}, ${cam.country} // ${isLive ? '🔴 60FPS LIVE STREAM' : '⏱️ 2.5S REAL-TIME SNAPSHOT'} · ${cam.source || 'CCTV'}`,
+        category: 'CCTV',
+        lat: cam.lat,
+        lng: cam.lon,
+        zoom: 15.5,
+        pitch: 45,
+        keywords: [cam.name, cam.city, cam.country, 'cctv', 'cam', '即時影像'],
+        cctvData: cam,
+      });
     }
 
     this.currentResults = results.slice(0, 10);
