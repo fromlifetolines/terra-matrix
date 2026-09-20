@@ -261,15 +261,23 @@ export class RadioPlayerWidget {
     if (this.searchQuery.trim()) {
       const q = this.searchQuery.trim().toLowerCase();
       const isTwQuery = q === '台灣' || q === '台湾' || q === 'tw' || q === 'taiwan';
-      list = list.filter(
-        (s) =>
-          s.name.toLowerCase().includes(q) ||
-          s.country.toLowerCase().includes(q) ||
-          (s.countryCode && s.countryCode.toLowerCase().includes(q)) ||
-          (s.state && s.state.toLowerCase().includes(q)) ||
-          s.tags.some((t) => t.toLowerCase().includes(q)) ||
-          (isTwQuery && (s.countryCode === 'TW' || s.country.toLowerCase().includes('taiwan')))
-      );
+      const isSfQuery = q === '舊金山' || q === '旧金山' || q === 'sf' || q === 'san francisco' || q === 'bay area';
+      const isLaQuery = q === '洛杉磯' || q === '洛杉矶' || q === 'la' || q === 'los angeles';
+      const isTokyoQuery = q === '東京' || q === '东京' || q === 'tokyo';
+      const isKyotoQuery = q === '京都' || q === 'kyoto';
+      const isOsakaQuery = q === '大阪' || q === 'osaka';
+
+      list = list.filter((s) => {
+        const fullText = `${s.name} ${s.country} ${s.countryCode} ${s.state || ''} ${s.tags.join(' ')}`.toLowerCase();
+        if (fullText.includes(q)) return true;
+        if (isTwQuery && (s.countryCode === 'TW' || fullText.includes('taiwan') || fullText.includes('台灣'))) return true;
+        if (isSfQuery && (fullText.includes('san francisco') || fullText.includes('bay area') || fullText.includes('somafm') || fullText.includes('kqed') || fullText.includes('kalw'))) return true;
+        if (isLaQuery && (fullText.includes('los angeles') || fullText.includes('kcrw') || fullText.includes('kusc') || fullText.includes('dublab') || fullText.includes('santa monica'))) return true;
+        if (isTokyoQuery && (fullText.includes('tokyo') || fullText.includes('東京') || fullText.includes('setagaya') || fullText.includes('nhk'))) return true;
+        if (isKyotoQuery && (fullText.includes('kyoto') || fullText.includes('京都'))) return true;
+        if (isOsakaQuery && (fullText.includes('osaka') || fullText.includes('大阪') || fullText.includes('kansai'))) return true;
+        return false;
+      });
     }
     return list;
   }
