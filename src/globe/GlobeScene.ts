@@ -8,6 +8,7 @@ import militaryBasesGeoJson from '../data/military-bases.json';
 import tectonicPlatesGeoJson from '../data/tectonic-plates.json';
 import { CycloneTracker, type CycloneItem } from './layers/CycloneLayer';
 import { DisasterTracker, type DisasterItem } from './layers/DisasterLayer';
+import { RadioTracker, type RadioStation } from './layers/RadioLayer';
 import { resolveFlightRouteDetails, type FlightRouteDetails } from './FlightTrajectoryHelper';
 
 export interface GlobeLayerState {
@@ -31,6 +32,7 @@ export interface GlobeLayerState {
   cyclones: boolean;
   disasters: boolean;
   faults: boolean;
+  radio: boolean;
 }
 
 export class GlobeScene {
@@ -53,10 +55,12 @@ export class GlobeScene {
   public onSelectCyclone?: (cyclone: CycloneItem) => void;
   public onSelectDisaster?: (disaster: DisasterItem) => void;
   public onSelectFault?: (fault: any) => void;
+  public onSelectRadioStation?: (station: RadioStation) => void;
   public onNewEarthquakeAlert?: (quake: EarthquakeItem) => void;
 
   private cycloneTracker = new CycloneTracker();
   private disasterTracker = new DisasterTracker();
+  private radioTracker = new RadioTracker();
 
   private allQuakes: EarthquakeItem[] = [];
   private seenQuakeIds = new Set<string>();
@@ -103,6 +107,7 @@ export class GlobeScene {
     cyclones: true,
     disasters: true,
     faults: true,
+    radio: true,
   };
 
   constructor(container: HTMLElement) {
@@ -148,6 +153,7 @@ export class GlobeScene {
       this.initTectonicPlatesLayer();
       this.initCyclonesLayer();
       this.initDisastersLayer();
+      this.initRadioLayer();
 
       // Initialize floating CCTV preview cards
       this.previewManager = new CctvPreviewsManager(this.map, this.container, (cam) => {
@@ -2073,6 +2079,126 @@ export class GlobeScene {
     }
   }
 
+  private async initRadioLayer(): Promise<void> {
+    try {
+      const baseUrl = import.meta.env.BASE_URL || '/';
+      if (!this.map.getSource('radio-stations-source')) {
+        this.map.addSource('radio-stations-source', {
+          type: 'geojson',
+          data: `${baseUrl}data/radio-stations.geojson?_t=${Date.now()}`,
+        });
+      }
+
+      // Outer wave glow
+      if (!this.map.getLayer('radio-glow-layer')) {
+        this.map.addLayer({
+          id: 'radio-glow-layer',
+          type: 'circle',
+          source: 'radio-stations-source',
+          paint: {
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 6, 5, 10, 10, 16, 14, 24],
+            'circle-color': [
+              'match', ['get', 'category'],
+              'news', '#44adff',
+              'traffic-transit', '#ffd166',
+              'public-safety', '#ff8b4a',
+              'aviation-marine', '#a87cff',
+              'weather', '#ff5c78',
+              'talk', '#f2b84b',
+              '#54d17a'
+            ],
+            'circle-opacity': 0.35,
+            'circle-blur': 0.85,
+          },
+          layout: {
+            visibility: this.layerStates.radio ? 'visible' : 'none',
+          },
+        });
+      }
+
+      // Center transmitter antenna dot
+      if (!this.map.getLayer('radio-dot-layer')) {
+        this.map.addLayer({
+          id: 'radio-dot-layer',
+          type: 'circle',
+          source: 'radio-stations-source',
+          paint: {
+            'circle-radius': ['interpolate', ['linear'], ['zoom'], 1, 3, 5, 5, 10, 7.5, 14, 11],
+            'circle-color': [
+              'match', ['get', 'category'],
+              'news', '#44adff',
+              'traffic-transit', '#ffd166',
+              'public-safety', '#ff8b4a',
+              'aviation-marine', '#a87cff',
+              'weather', '#ff5c78',
+              'talk', '#f2b84b',
+              '#54d17a'
+            ],
+            'circle-stroke-color': '#000000',
+            'circle-stroke-width': 1.6,
+          },
+          layout: {
+            visibility: this.layerStates.radio ? 'visible' : 'none',
+          },
+        });
+      }
+
+      // Station callsign and name label at zoom >= 7
+      if (!this.map.getLayer('radio-label-layer')) {
+        this.map.addLayer({
+          id: 'radio-label-layer',
+          type: 'symbol',
+          source: 'radio-stations-source',
+          minzoom: 7,
+          layout: {
+            'text-field': ['get', 'name'],
+            'text-size': 10,
+            'text-offset': [0, 1.4],
+            'text-max-width': 12,
+            'text-allow-overlap': false,
+            visibility: this.layerStates.radio ? 'visible' : 'none',
+          },
+          paint: {
+            'text-color': '#c5faff',
+            'text-halo-color': '#000000',
+            'text-halo-width': 1.6,
+          },
+        });
+      }
+
+      this.map.on('click', 'radio-dot-layer', (e) => {
+        const feat = e.features?.[0];
+        if (feat && feat.properties) {
+          const props = feat.properties as any;
+          const station: RadioStation = {
+            id: props.id,
+            name: props.name,
+            country: props.country,
+            countryCode: props.countryCode,
+            state: props.state,
+            lat: (feat.geometry as any)?.coordinates?.[1] || 0,
+            lon: (feat.geometry as any)?.coordinates?.[0] || 0,
+            streamUrl: props.streamUrl,
+            category: props.category,
+            tags: typeof props.tags === 'string' ? props.tags.split(',').map((t: string) => t.trim()) : (props.tags || []),
+            codec: props.codec || 'MP3',
+            bitrate: Number(props.bitrate) || 128,
+          };
+          this.onSelectRadioStation?.(station);
+        }
+      });
+
+      this.map.on('mouseenter', 'radio-dot-layer', () => {
+        this.map.getCanvas().style.cursor = 'pointer';
+      });
+      this.map.on('mouseleave', 'radio-dot-layer', () => {
+        this.map.getCanvas().style.cursor = '';
+      });
+    } catch (e) {
+      console.warn('[GlobeScene] Radio layer initialization error:', e);
+    }
+  }
+
   private initTacticalControls(): void {
     const controls = document.createElement('div');
     controls.className = 'map-controls-tactical';
@@ -2924,10 +3050,23 @@ export class GlobeScene {
         faultLayers.forEach((id) => {
           if (this.map.getLayer(id)) this.map.setLayoutProperty(id, 'visibility', vis);
         });
+      } else if (layerKey === 'radio') {
+        const radioLayers = ['radio-glow-layer', 'radio-dot-layer', 'radio-label-layer'];
+        radioLayers.forEach((id) => {
+          if (this.map.getLayer(id)) this.map.setLayoutProperty(id, 'visibility', vis);
+        });
       }
     } catch (e) {
       console.warn(`[GlobeScene] Toggle layer ${layerKey} error:`, e);
     }
+  }
+
+  public toggleRadio(visible: boolean): void {
+    this.toggleLayer('radio', visible);
+  }
+
+  public getRadioTracker(): RadioTracker {
+    return this.radioTracker;
   }
 
   public toggleDopplerRadar(visible: boolean): void {

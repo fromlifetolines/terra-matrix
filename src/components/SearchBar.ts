@@ -15,7 +15,7 @@ import { CCTV_PRESETS } from '../data/cctv-presets';
 export interface SearchResult {
   title: string;
   subtitle: string;
-  category: 'FLIGHT' | 'CITY' | 'DISTRICT' | 'CCTV' | 'GEOCODE' | 'CHOKEPOINT' | 'CAPITAL' | 'AIRPORT' | 'SPACE' | 'COORDS';
+  category: 'FLIGHT' | 'CITY' | 'DISTRICT' | 'CCTV' | 'GEOCODE' | 'CHOKEPOINT' | 'CAPITAL' | 'AIRPORT' | 'SPACE' | 'COORDS' | 'RADIO';
   lat: number;
   lng: number;
   zoom: number;
@@ -24,6 +24,7 @@ export interface SearchResult {
   keywords?: string[];
   flightData?: any;
   cctvData?: any;
+  radioData?: any;
 }
 
 // ── Taiwan Comprehensive Geographic Location Database ──
@@ -1020,6 +1021,7 @@ export class SearchBar {
   private debounceTimer: number | null = null;
   private currentResults: SearchResult[] = [];
   private activeIndex: number = -1;
+  private radioStations: any[] = [];
 
   constructor(
     parent: HTMLElement,
@@ -1029,7 +1031,18 @@ export class SearchBar {
     this.container = parent;
     this.onSelect = onSelect;
     this.onGetFlights = onGetFlights;
+    this.loadRadioStations();
     this.render();
+  }
+
+  private async loadRadioStations(): Promise<void> {
+    try {
+      const baseUrl = import.meta.env.BASE_URL || '/';
+      const res = await fetch(`${baseUrl}data/radio-stations.json?_t=${Date.now()}`);
+      if (res.ok) {
+        this.radioStations = await res.json();
+      }
+    } catch {}
   }
 
   private render(): void {
@@ -1362,6 +1375,29 @@ export class SearchBar {
         pitch: 45,
         keywords: [cam.name, cam.city, cam.country, 'cctv', 'cam', '即時影像'],
         cctvData: cam,
+      });
+    }
+
+    // 5. Global Radio Broadcast Stations Search
+    const isRadioQuery = /radio|廣播|電台|fm|am|警廣|正聲|bbc|kcrw|somafm/i.test(qLower);
+    const radioMatches = this.radioStations.filter((s) => {
+      const name = String(s.name || '').toLowerCase();
+      const country = String(s.country || '').toLowerCase();
+      const tags = (s.tags || []).map((t: string) => String(t).toLowerCase());
+      return name.includes(qLower) || country.includes(qLower) || tags.some((t: string) => t.includes(qLower));
+    }).slice(0, isRadioQuery ? 6 : 2);
+
+    for (const st of radioMatches) {
+      results.push({
+        title: `📻 ${st.name}`,
+        subtitle: `${st.country} // ${String(st.category || 'MUSIC').toUpperCase()} · ${st.bitrate || 128}k ${st.codec || 'MP3'}`,
+        category: 'RADIO',
+        lat: st.lat,
+        lng: st.lon,
+        zoom: 9.5,
+        pitch: 30,
+        keywords: [st.name, st.country, 'radio', '廣播', '電台'],
+        radioData: st,
       });
     }
 
