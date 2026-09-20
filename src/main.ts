@@ -339,6 +339,10 @@ class TerraMatrixApp {
       if (this.measureTool && this.measureTool.getIsActive()) {
         this.measureTool.handleMapClick(e.lngLat.lat, e.lngLat.lng);
       }
+      if (this.satelliteCardModal) {
+        this.satelliteCardModal.destroy();
+        this.satelliteCardModal = undefined;
+      }
     });
 
     // In-place CCTV Expanded Live Surveillance Terminal (matches LIVE FROM SPACE behavior)

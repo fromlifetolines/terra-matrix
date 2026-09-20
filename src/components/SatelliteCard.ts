@@ -34,6 +34,8 @@ export class SatelliteCardModal {
   private container: HTMLElement;
   private parentElement: HTMLElement;
   private onClose?: () => void;
+  private docClickListener: (e: MouseEvent) => void;
+  private keydownListener: (e: KeyboardEvent) => void;
 
   constructor(parentElement: HTMLElement, sat: SatelliteDetail, onClose?: () => void) {
     this.parentElement = parentElement;
@@ -41,6 +43,25 @@ export class SatelliteCardModal {
     this.container = document.createElement('div');
     this.container.className = 'satellite-detail-card';
     this.parentElement.appendChild(this.container);
+
+    this.docClickListener = (e: MouseEvent) => {
+      // Don't close if clicked inside the modal
+      if (this.container.contains(e.target as Node)) return;
+      this.destroy();
+    };
+
+    this.keydownListener = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        this.destroy();
+      }
+    };
+
+    // Defer click listener slightly to prevent the click that spawned it from immediately closing it
+    setTimeout(() => {
+      document.addEventListener('click', this.docClickListener);
+    }, 100);
+    window.addEventListener('keydown', this.keydownListener);
+
     this.render(sat);
   }
 
@@ -50,7 +71,7 @@ export class SatelliteCardModal {
     const estPeriod = sat.periodMinutes ?? (sat.alt < 2000 ? 92 : sat.alt < 20200 ? 718 : 1436);
     const estSpeed = speedKmS(sat.alt, estPeriod);
 
-    this.container.style.borderColor = `${accent}55`;
+    this.container.style.borderColor = `${accent}66`;
     this.container.innerHTML = `
       <div class="sat-accent-line" style="background: ${accent};"></div>
       <div class="sat-header">
@@ -58,10 +79,10 @@ export class SatelliteCardModal {
           <span class="sat-icon" style="color: ${accent};">🛰️</span>
           <div class="sat-names">
             <div class="sat-name" title="${sat.name}">${sat.name}</div>
-            <div class="sat-mission">${sat.mission || 'SPACE VEHICLE'}</div>
+            <div class="sat-mission">${sat.mission || 'ORBITING ASSET'}</div>
           </div>
         </div>
-        <button class="sat-close-btn" title="Close (Esc)">✕</button>
+        <button class="sat-close-btn" id="sat-close-btn" title="Close (Esc)">✕ CLOSE</button>
       </div>
 
       <div class="sat-grid">
@@ -99,17 +120,19 @@ export class SatelliteCardModal {
         </div>
       </div>
 
-      <div class="sat-track-status">
-        <span>● 3D ORBIT TRACK ACTIVE ON GLOBE</span>
-      </div>
+      <div class="sat-footer">
+        <div class="sat-track-status">
+          <span>● 3D ORBIT TRACK ACTIVE ON GLOBE</span>
+        </div>
 
-      ${
-        sat.noradId
-          ? `<a href="https://www.n2yo.com/satellite/?s=${encodeURIComponent(sat.noradId)}" target="_blank" rel="noopener noreferrer" class="sat-n2yo-btn" style="color: ${accent}; border-color: ${accent}44;">
-              TRACK ON N2YO ↗
-            </a>`
-          : ''
-      }
+        ${
+          sat.noradId
+            ? `<a href="https://www.n2yo.com/satellite/?s=${encodeURIComponent(sat.noradId)}" target="_blank" rel="noopener noreferrer" class="sat-n2yo-btn" style="color: ${accent}; border-color: ${accent}44;">
+                TRACK ON N2YO ↗
+              </a>`
+            : ''
+        }
+      </div>
     `;
 
     const closeBtn = this.container.querySelector('.sat-close-btn');
@@ -120,6 +143,8 @@ export class SatelliteCardModal {
   }
 
   public destroy(): void {
+    document.removeEventListener('click', this.docClickListener);
+    window.removeEventListener('keydown', this.keydownListener);
     this.container.remove();
     this.onClose?.();
   }

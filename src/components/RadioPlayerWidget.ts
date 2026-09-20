@@ -260,11 +260,15 @@ export class RadioPlayerWidget {
     }
     if (this.searchQuery.trim()) {
       const q = this.searchQuery.trim().toLowerCase();
+      const isTwQuery = q === '台灣' || q === '台湾' || q === 'tw' || q === 'taiwan';
       list = list.filter(
         (s) =>
           s.name.toLowerCase().includes(q) ||
           s.country.toLowerCase().includes(q) ||
-          s.tags.some((t) => t.toLowerCase().includes(q))
+          (s.countryCode && s.countryCode.toLowerCase().includes(q)) ||
+          (s.state && s.state.toLowerCase().includes(q)) ||
+          s.tags.some((t) => t.toLowerCase().includes(q)) ||
+          (isTwQuery && (s.countryCode === 'TW' || s.country.toLowerCase().includes('taiwan')))
       );
     }
     return list;
@@ -383,7 +387,7 @@ export class RadioPlayerWidget {
       return;
     }
 
-    filtered.slice(0, 150).forEach((s) => {
+    filtered.slice(0, 500).forEach((s) => {
       const isCurrent = this.currentStation?.id === s.id;
       const catConf = RADIO_CATEGORY_CONFIG[s.category] || RADIO_CATEGORY_CONFIG.music;
 
@@ -393,7 +397,7 @@ export class RadioPlayerWidget {
         <div class="radio-item-main">
           <div class="radio-item-name">${s.name}</div>
           <div class="radio-item-meta">
-            <span class="radio-item-country">${s.country}</span>
+            <span class="radio-item-country">${s.countryCode ? `[${s.countryCode}] ` : ''}${s.state ? `${s.state} · ` : ''}${s.country}</span>
             <span class="radio-item-tag" style="color:${catConf.color};">${catConf.label}</span>
           </div>
         </div>

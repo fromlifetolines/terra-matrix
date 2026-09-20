@@ -123,11 +123,15 @@ export class RadioTracker {
 
     if (query && query.trim()) {
       const q = query.trim().toLowerCase();
+      const isTwQuery = q === '台灣' || q === '台湾' || q === 'tw' || q === 'taiwan';
       result = result.filter(
         (s) =>
           s.name.toLowerCase().includes(q) ||
           s.country.toLowerCase().includes(q) ||
-          s.tags.some((t) => t.toLowerCase().includes(q))
+          (s.countryCode && s.countryCode.toLowerCase().includes(q)) ||
+          (s.state && s.state.toLowerCase().includes(q)) ||
+          s.tags.some((t) => t.toLowerCase().includes(q)) ||
+          (isTwQuery && (s.countryCode === 'TW' || s.country.toLowerCase().includes('taiwan')))
       );
     }
 
