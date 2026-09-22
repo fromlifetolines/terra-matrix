@@ -46,6 +46,7 @@ class TerraMatrixApp {
 
   private autoRotate = false;
   private isGlobeFullscreen = false;
+  private isMatrixFullscreen = false;
 
   constructor() {
     try {
@@ -129,9 +130,13 @@ class TerraMatrixApp {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="12 8 8 12 12 16 12 8"/></svg>
             RESET
           </button>
-          <button id="btn-toggle-fullscreen" class="header-btn" title="Toggle Fullscreen Tactical 3D View (Hide Stream Matrix)">
+          <button id="btn-toggle-fullscreen" class="header-btn" title="切換 3D 地球全螢幕 / 切割視窗 (Toggle Fullscreen 3D Globe)">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
-            <span id="btn-fullscreen-text">FULLSCREEN</span>
+            <span id="btn-fullscreen-text">GLOBE 3D</span>
+          </button>
+          <button id="btn-toggle-matrix-fullscreen" class="header-btn" title="切換 監視器矩陣全螢幕 / 切割視窗 (Toggle Fullscreen Live Matrix)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+            <span id="btn-matrix-fullscreen-text">LIVE MATRIX</span>
           </button>
           <div class="tpe-clock">
             <span id="zulu-clock" class="clock-zulu">ZULU 00:00:00 UTC</span>
@@ -262,7 +267,8 @@ class TerraMatrixApp {
             <span>CURSOR: <b id="bar-coords" class="telemetry-val">25.0400, 121.5000</b></span>
             <span>LOCATION: <b id="bar-location" class="telemetry-val">Taipei HQ / Global Intelligence Sphere</b></span>
             <span>ZOOM: <b id="bar-zoom" class="telemetry-val">2.3</b></span>
-            <button id="btn-expand-globe" class="telemetry-expand-btn" title="Toggle Fullscreen 3D Globe / City View">⛶ FULLSCREEN</button>
+            <button id="btn-expand-globe" class="telemetry-expand-btn" title="切換 3D 地球全螢幕 / 切割視窗 (Toggle Fullscreen 3D Globe)">⛶ GLOBE FULLSCREEN</button>
+            <button id="btn-expand-matrix" class="telemetry-expand-btn" title="切換 監視器全螢幕 / 切割視窗 (Toggle Fullscreen Live Matrix)">⛶ LIVE FULLSCREEN</button>
           </div>
           <div class="marquee-container">
             <div class="marquee-content" id="marquee-ticker">
@@ -1016,6 +1022,9 @@ class TerraMatrixApp {
     if (!container) return;
 
     this.streamMatrix = new StreamMatrix(container);
+    this.streamMatrix.onToggleFullscreen = () => {
+      this.toggleMatrixFullscreen();
+    };
   }
 
   private showInfoCard(opts: {
@@ -1135,7 +1144,21 @@ class TerraMatrixApp {
       });
     }
 
-    // Keyboard Shortcuts: 'F' toggles Fullscreen, 'ESC' exits Fullscreen
+    const matrixFullscreenBtn = document.getElementById('btn-toggle-matrix-fullscreen');
+    if (matrixFullscreenBtn) {
+      matrixFullscreenBtn.addEventListener('click', () => {
+        this.toggleMatrixFullscreen();
+      });
+    }
+
+    const expandMatrixBtn = document.getElementById('btn-expand-matrix');
+    if (expandMatrixBtn) {
+      expandMatrixBtn.addEventListener('click', () => {
+        this.toggleMatrixFullscreen();
+      });
+    }
+
+    // Keyboard Shortcuts: 'F' toggles Globe Fullscreen, 'M' toggles Matrix Fullscreen, 'ESC' exits Fullscreen
     window.addEventListener('keydown', (e) => {
       const activeTag = (document.activeElement?.tagName || '').toLowerCase();
       if (activeTag === 'input' || activeTag === 'textarea') return;
@@ -1145,8 +1168,18 @@ class TerraMatrixApp {
           e.preventDefault();
           this.toggleGlobeFullscreen();
         }
-      } else if (e.key === 'Escape' && this.isGlobeFullscreen) {
-        this.toggleGlobeFullscreen(false);
+      } else if (e.key === 'm' || e.key === 'M') {
+        if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+          e.preventDefault();
+          this.toggleMatrixFullscreen();
+        }
+      } else if (e.key === 'Escape') {
+        if (this.isGlobeFullscreen) {
+          this.toggleGlobeFullscreen(false);
+        }
+        if (this.isMatrixFullscreen) {
+          this.toggleMatrixFullscreen(false);
+        }
       }
     });
   }
@@ -1156,6 +1189,12 @@ class TerraMatrixApp {
     if (!workspace) return;
 
     this.isGlobeFullscreen = force !== undefined ? force : !this.isGlobeFullscreen;
+    
+    // Mutually exclusive fullscreen modes
+    if (this.isGlobeFullscreen && this.isMatrixFullscreen) {
+      this.toggleMatrixFullscreen(false);
+    }
+
     workspace.classList.toggle('globe-fullscreen', this.isGlobeFullscreen);
 
     const btn = document.getElementById('btn-toggle-fullscreen');
@@ -1170,8 +1209,8 @@ class TerraMatrixApp {
     } else {
       btn?.classList.remove('active');
       if (btn) btn.style.color = '';
-      if (label) label.textContent = 'FULLSCREEN';
-      if (expandBtn) expandBtn.textContent = '⛶ FULLSCREEN';
+      if (label) label.textContent = 'GLOBE 3D';
+      if (expandBtn) expandBtn.textContent = '⛶ GLOBE FULLSCREEN';
     }
 
     // Trigger canvas resize for MapLibre, Three.js, and Cesium
@@ -1182,6 +1221,41 @@ class TerraMatrixApp {
           this.globeScene.getMap()?.resize();
         } catch {}
       }
+    });
+  }
+
+  public toggleMatrixFullscreen(force?: boolean): void {
+    const workspace = document.querySelector('.terra-workspace');
+    if (!workspace) return;
+
+    this.isMatrixFullscreen = force !== undefined ? force : !this.isMatrixFullscreen;
+
+    // Mutually exclusive fullscreen modes
+    if (this.isMatrixFullscreen && this.isGlobeFullscreen) {
+      this.toggleGlobeFullscreen(false);
+    }
+
+    workspace.classList.toggle('matrix-fullscreen', this.isMatrixFullscreen);
+    this.streamMatrix?.setFullscreenMode(this.isMatrixFullscreen);
+
+    const headerBtn = document.getElementById('btn-toggle-matrix-fullscreen');
+    const headerLabel = document.getElementById('btn-matrix-fullscreen-text');
+    const expandBtn = document.getElementById('btn-expand-matrix');
+
+    if (this.isMatrixFullscreen) {
+      headerBtn?.classList.add('active');
+      if (headerBtn) headerBtn.style.color = 'var(--accent-cyan)';
+      if (headerLabel) headerLabel.textContent = 'SPLIT VIEW';
+      if (expandBtn) expandBtn.textContent = '🗗 SPLIT VIEW';
+    } else {
+      headerBtn?.classList.remove('active');
+      if (headerBtn) headerBtn.style.color = '';
+      if (headerLabel) headerLabel.textContent = 'LIVE MATRIX';
+      if (expandBtn) expandBtn.textContent = '⛶ LIVE FULLSCREEN';
+    }
+
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new Event('resize'));
     });
   }
 }

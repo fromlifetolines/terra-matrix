@@ -1,6 +1,6 @@
 import { DEFAULT_MATRIX_CHANNELS, CCTV_PRESETS, type CCTVPoint } from '../data/cctv-presets';
 
-export const GRID_LAYOUTS = ['1x1', '1x2', '2x2', '2x3', '2x4', '3x3'] as const;
+export const GRID_LAYOUTS = ['1x1', '1x2', '2x2', '2x3', '2x4', '3x3', '3x4', '4x4', '4x6', 'auto'] as const;
 export type MatrixGridLayout = typeof GRID_LAYOUTS[number] | 'auto';
 
 export interface MatrixChannel {
@@ -12,17 +12,27 @@ export interface MatrixChannel {
   country?: string;
 }
 
-const STORAGE_CHANNELS_KEY = 'terra_matrix_channels_v5';
-const STORAGE_LAYOUT_KEY = 'terra_matrix_layout_v5';
+const STORAGE_CHANNELS_KEY = 'terra_matrix_channels_v6';
+const STORAGE_LAYOUT_KEY = 'terra_matrix_layout_v6';
+
+// Known dead/broken YouTube video IDs to automatically filter out
+const KNOWN_DEAD_VIDEOS = new Set([
+  'WcMi5QCMKWI', 'Q5o_Y-f4Ees', 'hRwsYAXX-ug', '_bqSC_1QG5U', '7tygT_AEaUY',
+  'oT06aeCSCbU', 'Pmt2TXVz7Ks', 'Rx7TjC0YGXQ', 'n8V3DKIZ2Rw', 'B_bpRfB5MJk',
+  'k3rz4mLI__Y', 'RRk98xO-k6A', 'cGWJk46G2JE', 'SiSnNxIHe3w', '_VUoLPJN7Yk',
+  'TL8MMGiF0hA', '_GDAswKx6Cg', '7pcL-0Wo77U', 'xL0ch83RAK8'
+]);
 
 export class StreamMatrix {
   private container: HTMLElement;
   private channels: MatrixChannel[] = [];
-  private currentLayout: MatrixGridLayout = '2x2';
+  private currentLayout: MatrixGridLayout = '2x4';
   private soloChannelId: string | null = null;
   private fullscreenTileId: string | null = null;
   private editingChannelId: string | null = null;
 
+  public isFullscreenMode = false;
+  public onToggleFullscreen?: () => void;
   public onChannelFocus?: (channel: MatrixChannel) => void;
 
   constructor(container: HTMLElement) {
@@ -33,58 +43,59 @@ export class StreamMatrix {
 
   private loadState(): void {
     try {
-      // Check v5 storage first, fallback to v4/v3 with automatic migration
+      // Check v6 storage first, fallback to older keys
       let savedChannels = localStorage.getItem(STORAGE_CHANNELS_KEY);
       if (!savedChannels) {
-        savedChannels = localStorage.getItem('terra_matrix_channels_v4') || localStorage.getItem('terra_matrix_channels_v3');
+        savedChannels = localStorage.getItem('terra_matrix_channels_v5') || localStorage.getItem('terra_matrix_channels_v4');
       }
 
       if (savedChannels) {
         let parsed: MatrixChannel[] = JSON.parse(savedChannels);
 
-        // Filter out broken feeds
+        // Filter out all dead feeds
         parsed = parsed.filter(
-          (ch) => ch.id !== 'sydney-harbour' && ch.videoId !== '7pcL-0Wo77U' && ch.videoId !== 'xL0ch83RAK8'
+          (ch) => !ch.videoId || !KNOWN_DEAD_VIDEOS.has(ch.videoId)
         );
 
         // Auto-migrate legacy channel IDs to 100% verified working streams
         parsed = parsed.map((ch) => {
-          if (ch.id === 'ttv-news' || ch.id === 'cts-news' || ch.videoId === 'TL8MMGiF0hA') {
+          if (ch.id === 'tokyo-shibuya' || ch.name.includes('澀谷') || ch.name.includes('Shibuya')) {
             return {
-              id: 'dw-news',
+              id: 'jp-tokyo-shibuya-scramble',
+              name: '東京澀谷站前十字路口 24H 實況 4K (Shibuya Crossing Live)',
+              videoId: 'dfVK7ld38Ys',
+              city: 'Tokyo',
+              country: 'Japan',
+            };
+          }
+          if (ch.id === 'dw-news' || ch.name.includes('DW News')) {
+            return {
+              id: 'de-dw-news',
               name: 'DW News 24/7 International',
               videoId: 'LuKwFajn37U',
               city: 'Berlin',
               country: 'Germany',
             };
           }
-          if (ch.id === 'ctv-news' || ch.name.includes('中視')) {
+          if (ch.id === 'cts-news' || ch.name.includes('華視')) {
             return {
-              id: 'ctv-news',
-              name: '中視新聞 CTV News Live 24H',
-              videoId: '_GDAswKx6Cg',
+              id: 'tw-cts-news',
+              name: '華視新聞 24H 實況直播 CH52',
+              videoId: 'wM0g8EoUZ_E',
               city: 'Taipei',
               country: 'Taiwan',
-            };
-          }
-          if (ch.id === 'tokyo-shibuya' || ch.name.includes('澀谷') || ch.name.includes('Shibuya')) {
-            return {
-              id: 'tokyo-shibuya',
-              name: '東京澀谷街頭 4K CCTV (Shibuya Crossing Live)',
-              videoId: '4993sBLAzGA',
-              city: 'Tokyo',
-              country: 'Japan',
             };
           }
           return ch;
         });
 
-        // If after cleaning we have fewer than 4 channels, ensure default 4 feeds
+        // Ensure default verified channels if list is sparse
         if (parsed.length < 4) {
           this.channels = DEFAULT_MATRIX_CHANNELS.map((c) => ({
             id: c.id,
             name: c.name,
             videoId: c.videoId,
+            feed_url: c.stream_url || c.feed_url,
             city: c.city,
             country: c.country,
           }));
@@ -96,13 +107,14 @@ export class StreamMatrix {
           id: c.id,
           name: c.name,
           videoId: c.videoId,
+          feed_url: c.stream_url || c.feed_url,
           city: c.city,
           country: c.country,
         }));
       }
 
-      const savedLayout = localStorage.getItem(STORAGE_LAYOUT_KEY) || localStorage.getItem('terra_matrix_layout_v3') || localStorage.getItem('terra_matrix_layout_v2');
-      if (savedLayout && ['1x1', '1x2', '2x2', '2x3', '2x4', '3x3', '3x4', 'auto'].includes(savedLayout)) {
+      const savedLayout = localStorage.getItem(STORAGE_LAYOUT_KEY) || localStorage.getItem('terra_matrix_layout_v5');
+      if (savedLayout && (GRID_LAYOUTS as readonly string[]).includes(savedLayout)) {
         this.currentLayout = savedLayout as MatrixGridLayout;
       }
     } catch (e) {
@@ -111,6 +123,7 @@ export class StreamMatrix {
         id: c.id,
         name: c.name,
         videoId: c.videoId,
+        feed_url: c.stream_url || c.feed_url,
         city: c.city,
         country: c.country,
       }));
@@ -128,8 +141,69 @@ export class StreamMatrix {
 
   public setLayout(layout: MatrixGridLayout): void {
     this.currentLayout = layout;
+    const targetMap: Record<string, number> = {
+      '1x1': 1,
+      '1x2': 2,
+      '2x2': 4,
+      '2x3': 6,
+      '2x4': 8,
+      '3x3': 9,
+      '3x4': 12,
+      '4x4': 16,
+      '4x6': 24,
+      'auto': 8,
+    };
+    const needed = targetMap[layout] || 8;
+    if (this.channels.length < needed) {
+      this.quickFillCurrentLayout();
+    } else {
+      this.saveState();
+      this.render();
+    }
+  }
+
+  public quickFillCurrentLayout(): void {
+    const targetMap: Record<string, number> = {
+      '1x1': 1,
+      '1x2': 2,
+      '2x2': 4,
+      '2x3': 6,
+      '2x4': 8,
+      '3x3': 9,
+      '3x4': 12,
+      '4x4': 16,
+      '4x6': 24,
+      'auto': 8,
+    };
+    const needed = targetMap[this.currentLayout] || 8;
+    const existingIds = new Set(this.channels.map((c) => c.id || c.videoId));
+
+    for (const preset of CCTV_PRESETS) {
+      if (this.channels.length >= needed) break;
+      const key = preset.id || preset.videoId;
+      if (key && !existingIds.has(key)) {
+        this.channels.push({
+          id: preset.id,
+          name: preset.name,
+          videoId: preset.videoId,
+          feed_url: preset.stream_url || preset.feed_url,
+          city: preset.city,
+          country: preset.country,
+        });
+        existingIds.add(key);
+      }
+    }
     this.saveState();
     this.render();
+  }
+
+  public setFullscreenMode(active: boolean): void {
+    this.isFullscreenMode = active;
+    const btn = this.container.querySelector('#btn-matrix-fullscreen-toggle');
+    if (btn) {
+      btn.textContent = active ? '🗗 SPLIT VIEW' : '⛶ FULLSCREEN';
+      btn.classList.toggle('active', active);
+    }
   }
 
   public addChannel(channel: MatrixChannel): void {
@@ -272,7 +346,7 @@ export class StreamMatrix {
         <div class="matrix-header">
           <div class="matrix-title-group">
             <span class="matrix-badge">SWISS GRID</span>
-            <span class="matrix-label">LIVE STREAM MATRIX</span>
+            <span class="matrix-label">LIVE CCTV MATRIX</span>
             <span class="matrix-count">[${this.channels.length} FEEDS ACTIVE]</span>
           </div>
 
@@ -291,16 +365,19 @@ export class StreamMatrix {
               placeholder="YouTube 網址或 ID" 
             />
             <button id="matrix-add-btn" class="matrix-btn">
-              + ADD 按鈕
+              + ADD
             </button>
             <select id="matrix-preset-select" class="matrix-select" title="Preset Channels">
-              <option value="" disabled selected>Presets...</option>
+              <option value="" disabled selected>觀光景點/精選...</option>
               ${CCTV_PRESETS.map((p) => `<option value="${p.id}">${p.name}</option>`).join('')}
             </select>
           </div>
 
-          <!-- Expanded Layout Switcher (Rendered via array: ['1x1', '1x2', '2x2', '2x3', '2x4', '3x3']) -->
+          <!-- Layout Switcher & Fullscreen Controls -->
           <div class="matrix-layout-presets">
+            <button id="btn-matrix-quick-fill" class="matrix-btn matrix-quick-fill-btn" title="一鍵自動填滿當前網格格式 (Quick Fill Grid with Top Live Cameras)">
+              ⚡ 填滿 (${this.channels.length})
+            </button>
             ${GRID_LAYOUTS.map(
               (layout) => `
               <button class="layout-btn ${this.currentLayout === layout ? 'active' : ''}" data-layout="${layout}" title="${layout}">
@@ -308,11 +385,14 @@ export class StreamMatrix {
               </button>
             `
             ).join('')}
+            <button id="btn-matrix-fullscreen-toggle" class="matrix-btn matrix-fullscreen-toggle-btn ${this.isFullscreenMode ? 'active' : ''}" title="切換監視器矩陣全螢幕 / 切割視窗 (Toggle Matrix Fullscreen)">
+              ${this.isFullscreenMode ? '🗗 SPLIT VIEW' : '⛶ FULLSCREEN'}
+            </button>
           </div>
         </div>
 
         <!-- Scrollable Matrix Video Grid -->
-        <div class="matrix-scroll-container" style="max-height: 50vh; overflow-y: auto;">
+        <div class="matrix-scroll-container">
           <div class="matrix-grid grid-${this.currentLayout} ${this.fullscreenTileId ? 'has-fullscreen-tile' : ''}">
             ${
               activeChannels.length === 0
@@ -334,8 +414,8 @@ export class StreamMatrix {
                     <div class="tile-actions">
                       <!-- ✏️ (編輯此格) -->
                       <button class="tile-btn edit-btn" data-id="${ch.id}" title="✏️ 編輯此格">✏️</button>
-                      <!-- ↗️ (開新分頁播放，避開版權阻擋) -->
-                      <button class="tile-btn popout-btn" data-videoid="${ch.videoId}" title="↗️ 開新分頁播放 (避開版權阻擋)">↗️</button>
+                      <!-- ↗️ (開新分頁播放) -->
+                      <button class="tile-btn popout-btn" data-videoid="${ch.videoId || ''}" title="↗️ 開新分頁播放">↗️</button>
                       <!-- Audio Solo Button -->
                       <button class="tile-btn solo-btn ${isSolo ? 'active-solo' : ''}" id="solo-btn-${ch.id}" data-id="${ch.id}" title="${isSolo ? '靜音' : '原音'}">
                         ${isSolo ? '🔊' : '🔇'}
@@ -354,7 +434,7 @@ export class StreamMatrix {
                     <div class="tile-edit-overlay">
                       <div class="tile-edit-header">EDIT FEED PARAMETERS</div>
                       <input type="text" class="tile-edit-input" id="edit-name-${ch.id}" value="${ch.name}" placeholder="Feed Name..." />
-                      <input type="text" class="tile-edit-input" id="edit-video-${ch.id}" value="${ch.videoId}" placeholder="YouTube URL or Video ID..." />
+                      <input type="text" class="tile-edit-input" id="edit-video-${ch.id}" value="${ch.videoId || ''}" placeholder="YouTube URL or Video ID..." />
                       <div class="tile-edit-actions">
                         <button class="matrix-btn save-edit-btn" data-id="${ch.id}">SAVE & RELOAD</button>
                         <button class="matrix-btn cancel-edit-btn" data-id="${ch.id}" style="background:#111;color:#9ca3af;">CANCEL</button>
@@ -406,7 +486,7 @@ export class StreamMatrix {
   }
 
   private bindEvents(): void {
-    // Layout switcher (1x1, 1x2, 2x2, 2x3, 2x4, 3x3, auto)
+    // Layout switcher (1x1, 1x2, 2x2, 2x3, 2x4, 3x3, 3x4, 4x4, 4x6, auto)
     this.container.querySelectorAll('.layout-btn').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         const layout = (e.currentTarget as HTMLElement).dataset.layout as MatrixGridLayout;
@@ -416,6 +496,24 @@ export class StreamMatrix {
         }
       });
     });
+
+    // Quick Fill Button
+    const quickFillBtn = this.container.querySelector('#btn-matrix-quick-fill');
+    if (quickFillBtn) {
+      quickFillBtn.addEventListener('click', () => {
+        this.quickFillCurrentLayout();
+      });
+    }
+
+    // Matrix Fullscreen Toggle Button
+    const fsToggleBtn = this.container.querySelector('#btn-matrix-fullscreen-toggle');
+    if (fsToggleBtn) {
+      fsToggleBtn.addEventListener('click', () => {
+        if (this.onToggleFullscreen) {
+          this.onToggleFullscreen();
+        }
+      });
+    }
 
     // Solo buttons
     this.channels.forEach((ch) => {
@@ -531,6 +629,7 @@ export class StreamMatrix {
             id: target.id,
             name: target.name,
             videoId: target.videoId,
+            feed_url: target.stream_url || target.feed_url,
             city: target.city,
             country: target.country,
           });
