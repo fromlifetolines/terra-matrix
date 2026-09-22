@@ -30,6 +30,15 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = 15000) {
 
 async function run() {
   console.log('[FlightSync] Initiating real-time ADS-B telemetry synchronization...');
+  const force = process.argv.includes('--force');
+  if (!force && fs.existsSync(targetPath) && fs.statSync(targetPath).size > 100000) {
+    const ageHours = (Date.now() - fs.statSync(targetPath).mtimeMs) / 3600000;
+    if (ageHours < 12) {
+      console.log(`[FlightSync] Existing flights.json is valid and fresh (${ageHours.toFixed(1)}h old). Skipping network download.`);
+      return;
+    }
+  }
+
   const nowTs = Date.now();
   let flightPayload = null;
 
@@ -41,7 +50,7 @@ async function run() {
         'User-Agent': 'TerraMatrix-Intelligence/4.2 (Airspace Telemetry Ingest)',
         'Accept': 'application/json',
       },
-    }, 20000);
+    }, 4000);
 
     if (res.ok) {
       const data = await res.json();
@@ -122,7 +131,7 @@ async function run() {
         headers: {
           'User-Agent': 'TerraMatrix-Intelligence/4.2',
         },
-      }, 20000);
+      }, 4000);
 
       if (res.ok) {
         const osData = await res.json();

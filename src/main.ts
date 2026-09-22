@@ -20,8 +20,6 @@ import { EarthquakeWatchPanel } from './components/EarthquakeWatchPanel';
 import { CesiumCityViewer } from './globe/CesiumCityViewer';
 import type { EarthquakeItem } from './globe/layers/EarthquakeLayer';
 import type { GeoIncident } from './data/incidents-news';
-import { RadioPlayerWidget } from './components/RadioPlayerWidget';
-import type { RadioStation } from './globe/layers/RadioLayer';
 
 class TerraMatrixApp {
   private globeScene!: GlobeScene;
@@ -45,7 +43,6 @@ class TerraMatrixApp {
   private cctvExpandedModal!: CctvExpandedModal;
   private directionsPanel!: DirectionsPanel;
   private osintPanel!: OsintPanel;
-  private radioPlayerWidget!: RadioPlayerWidget;
 
   private autoRotate = false;
   private isGlobeFullscreen = false;
@@ -184,10 +181,6 @@ class TerraMatrixApp {
               <span class="category-rail-icon">⚡</span>
               <span>CYBER</span>
             </button>
-            <button class="category-rail-btn active" id="cat-btn-radio" title="Global Radio Broadcasts & Live Audio Tuner (God's Eye View)">
-              <span class="category-rail-icon">📻</span>
-              <span>RADIO (848)</span>
-            </button>
           </div>
 
           <!-- Right Tactical Action Rail -->
@@ -253,9 +246,6 @@ class TerraMatrixApp {
             </button>
             <button class="tactical-rail-btn active" id="rail-btn-iss-cam" title="Toggle 24/7 ISS Live Cam">
               <span>📹</span> ISS CAM
-            </button>
-            <button class="tactical-rail-btn active" id="rail-btn-radio" title="Global Radio Broadcasts & Live Audio Tuner (God's Eye View)">
-              <span>📻</span> RADIO
             </button>
             <button class="tactical-rail-btn" id="rail-btn-target" title="Focus Taiwan HQ Command">
               <span>🎯</span> TAIWAN HQ
@@ -569,14 +559,6 @@ class TerraMatrixApp {
       this.spaceTrackingPanel.toggle();
     });
 
-    // Radio button on category rail
-    const catBtnRadio = document.getElementById('cat-btn-radio');
-    catBtnRadio?.addEventListener('click', () => {
-      const isVis = catBtnRadio.classList.toggle('active');
-      this.globeScene.toggleRadio(isVis);
-      this.radioPlayerWidget.toggle();
-    });
-
     // Right Tactical Action Rail buttons
     const btn3d = document.getElementById('rail-btn-3d');
     const btn2d = document.getElementById('rail-btn-2d');
@@ -727,13 +709,6 @@ class TerraMatrixApp {
       btnIssCam.classList.toggle('active');
     });
 
-    const btnRadio = document.getElementById('rail-btn-radio');
-    btnRadio?.addEventListener('click', () => {
-      const active = btnRadio.classList.toggle('active');
-      this.globeScene.toggleRadio(active);
-      this.radioPlayerWidget.toggle();
-    });
-
     btnTarget?.addEventListener('click', () => {
       this.globeScene.focusCoordinates(25.04, 121.5, 7.5, 45, 355);
     });
@@ -879,13 +854,6 @@ class TerraMatrixApp {
             };
             this.globeScene.highlightFlight(flight);
             this.globeScene.onSelectFlight?.(flight);
-            return;
-          }
-          if (res.category === 'RADIO') {
-            this.globeScene.focusCoordinates(res.lat, res.lng, res.zoom || 9.5, res.pitch || 30, res.bearing || 0);
-            if (res.radioData) {
-              this.radioPlayerWidget.open(res.radioData);
-            }
             return;
           }
           if (res.category === 'CCTV') {
@@ -1035,35 +1003,6 @@ class TerraMatrixApp {
         `,
       });
     };
-
-    // 12. Mount Global Tactical Radio Player (God's Eye View inspired)
-    this.radioPlayerWidget = new RadioPlayerWidget();
-    this.radioPlayerWidget.onStationSelected = (station: RadioStation) => {
-      this.globeScene.focusCoordinates(station.lat, station.lon, 7.5, 30, 0);
-      this.showInfoCard({
-        badge: `RADIO // ${station.category.toUpperCase()}`,
-        badgeClass: 'MONITOR',
-        title: station.name,
-        content: `
-          <div style="font-size:11px;margin-bottom:6px;">
-            <div><strong>Country:</strong> ${station.country} (${station.countryCode})</div>
-            <div><strong>Format:</strong> ${station.bitrate || 128} kbps // ${station.codec}</div>
-            <div><strong>Category:</strong> ${station.category.toUpperCase()}</div>
-            <div><strong>Tags:</strong> ${station.tags.join(', ')}</div>
-          </div>
-          <div style="color:var(--accent-cyan);">● 即時全球廣播串流已連線播放</div>
-        `,
-      });
-    };
-
-    this.globeScene.onSelectRadioStation = (station: RadioStation) => {
-      this.radioPlayerWidget.open(station);
-    };
-
-    // Load radio stations into the player
-    this.globeScene.getRadioTracker().loadStations().then((stations) => {
-      this.radioPlayerWidget.setStations(stations);
-    });
 
     // Update counts when satellites load
     setTimeout(() => {

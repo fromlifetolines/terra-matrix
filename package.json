@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "vite",
     "sync-flights": "node scripts/fetch-realtime-flights.mjs",
+    "sync-cctv": "node scripts/build-twlive-cctv.mjs && node scripts/merge-cctv-presets.mjs",
     "merge-cctv": "node scripts/merge-cctv-presets.mjs",
-    "build": "node scripts/fetch-realtime-flights.mjs && node scripts/merge-cctv-presets.mjs && tsc && vite build",
+    "build": "node scripts/merge-cctv-presets.mjs && tsc && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
